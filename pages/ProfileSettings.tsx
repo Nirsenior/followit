@@ -14,10 +14,22 @@ interface ProfileSettingsProps {
 }
 
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, onNavigate, onLogout }) => {
-  const [localProfile, setLocalProfile] = useState<UserProfile>(profile);
+  const [localProfile, setLocalProfile] = useState<UserProfile>(JSON.parse(JSON.stringify(profile)));
   const [activeTab, setActiveTab] = useState<'personal' | 'agreements' | 'account'>('personal');
 
-  const handleSave = () => { setProfile(localProfile); alert('השינויים נשמרו בהצלחה'); };
+  const handleSave = () => { 
+    // Save the changes to the global state
+    setProfile(localProfile); 
+    // Navigate back to the main dashboard (Home screen)
+    onNavigate('dashboard');
+  };
+
+  const updatePayment = (field: string, value: string) => {
+    setLocalProfile({
+      ...localProfile,
+      paymentMethod: { ...localProfile.paymentMethod, [field]: value }
+    });
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
@@ -44,12 +56,14 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-10 max-w-6xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto p-10 max-w-6xl mx-auto w-full relative">
         <header className="flex justify-between items-center mb-10">
-           <h1 className="text-3xl font-bold tracking-tight">הגדרות חשבון</h1>
-           <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2">
-             <Save className="w-5 h-5" /> שמור שינויים
-           </button>
+           <h1 className="text-3xl font-bold tracking-tight text-slate-900">הגדרות חשבון</h1>
+           <div className="flex items-center gap-4">
+             <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2">
+               <Save className="w-5 h-5" /> שמור שינויים
+             </button>
+           </div>
         </header>
 
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
@@ -71,16 +85,16 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                 <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם פרטי</label>
-                    <input type="text" value={localProfile.firstName} onChange={e => setLocalProfile({...localProfile, firstName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-slate-50/30" />
+                    <input type="text" value={localProfile.firstName} onChange={e => setLocalProfile({...localProfile, firstName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם משפחה</label>
-                    <input type="text" value={localProfile.lastName} onChange={e => setLocalProfile({...localProfile, lastName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-slate-50/30" />
+                    <input type="text" value={localProfile.lastName} onChange={e => setLocalProfile({...localProfile, lastName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
                   </div>
                 </div>
 
                 <div className="space-y-5">
-                   <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2">חברות ביטוח בהסדר</h3>
+                   <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2 uppercase tracking-wide">חברות ביטוח בהסדר</h3>
                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                      {INSURANCE_COMPANIES.map(company => {
                        const isSelected = localProfile.selectedCompanies.includes(company);
@@ -100,32 +114,39 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
 
             {activeTab === 'agreements' && (
               <div className="space-y-8 animate-fadeIn">
+                {localProfile.selectedCompanies.length === 0 && (
+                  <div className="text-center py-10">
+                    <p className="text-slate-400">טרם בחרת חברות ביטוח בלשונית הפרטים האישיים.</p>
+                  </div>
+                )}
                 {localProfile.selectedCompanies.map(company => (
                   <div key={company} className="bg-slate-50/50 p-8 rounded-3xl border border-slate-200 space-y-6">
                     <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
                       <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div> הסכמים: {company}
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {(['private', 'pension', 'elementary'] as InsuranceType[]).map(type => (
+                      {(['private', 'pension', 'elementary', 'financial', 'abroad'] as InsuranceType[]).map(type => (
                         <div key={type} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                          <h4 className="font-bold text-sm text-slate-700">{INSURANCE_TYPE_LABELS[type]}</h4>
+                          <h4 className="font-bold text-sm text-sky-600">{INSURANCE_TYPE_LABELS[type]}</h4>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="relative">
                               <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת היקף</label>
                               <input type="number" value={localProfile.agreements[company]?.[type]?.scope || ''} onChange={e => {
                                 const next = {...localProfile.agreements};
-                                next[company] = {...(next[company] || {}), [type]: {...(next[company]?.[type] || {}), scope: e.target.value}};
+                                if (!next[company]) next[company] = {};
+                                next[company][type] = {...(next[company][type] || {}), scope: e.target.value};
                                 setLocalProfile({...localProfile, agreements: next});
-                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none" />
+                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
                               <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
                             </div>
                             <div className="relative">
                               <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת נפרעים</label>
                               <input type="number" value={localProfile.agreements[company]?.[type]?.ongoing || ''} onChange={e => {
                                 const next = {...localProfile.agreements};
-                                next[company] = {...(next[company] || {}), [type]: {...(next[company]?.[type] || {}), ongoing: e.target.value}};
+                                if (!next[company]) next[company] = {};
+                                next[company][type] = {...(next[company][type] || {}), ongoing: e.target.value};
                                 setLocalProfile({...localProfile, agreements: next});
-                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none" />
+                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
                               <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
                             </div>
                           </div>
@@ -143,17 +164,61 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                   <div className="relative z-10 flex justify-between items-end">
                     <div>
                       <div className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-2">אמצעי תשלום פעיל</div>
-                      <div className="text-xl font-mono tracking-widest tabular-nums">{localProfile.paymentMethod.cardNumber}</div>
+                      <div className="text-xl font-mono tracking-widest tabular-nums">
+                        {localProfile.paymentMethod.cardNumber || '**** **** **** ****'}
+                      </div>
                     </div>
-                    <button className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold transition-standard">החלף כרטיס</button>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-2">תוקף</div>
+                      <div className="text-lg font-mono">{localProfile.paymentMethod.expiry || 'MM/YY'}</div>
+                    </div>
                   </div>
-                  <CreditCard className="absolute top-1/2 right-4 w-32 h-32 text-white/5 -translate-y-1/2 rotate-12 group-hover:scale-110 transition-transform duration-700" />
+                  <div className="mt-6 font-bold text-sm opacity-60 uppercase">{localProfile.firstName} {localProfile.lastName}</div>
+                  <CreditCard className="absolute top-1/2 right-4 w-32 h-32 text-white/5 -translate-y-1/2 rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none" />
+                </div>
+
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                   <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2 uppercase tracking-wide">עריכת פרטי תשלום</h3>
+                   <div className="space-y-4">
+                     <div>
+                       <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">מספר כרטיס אשראי</label>
+                       <input 
+                         type="text" 
+                         value={localProfile.paymentMethod.cardNumber}
+                         onChange={(e) => updatePayment('cardNumber', e.target.value)}
+                         className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
+                         placeholder="0000 0000 0000 0000"
+                       />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                       <div>
+                         <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">תוקף (MM/YY)</label>
+                         <input 
+                           type="text" 
+                           value={localProfile.paymentMethod.expiry}
+                           onChange={(e) => updatePayment('expiry', e.target.value)}
+                           className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
+                           placeholder="12/28"
+                         />
+                       </div>
+                       <div>
+                         <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">CVV</label>
+                         <input 
+                           type="text" 
+                           value={localProfile.paymentMethod.cvv}
+                           onChange={(e) => updatePayment('cvv', e.target.value)}
+                           className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
+                           placeholder="000"
+                         />
+                       </div>
+                     </div>
+                   </div>
                 </div>
 
                 <div className="space-y-6 pt-6 border-t border-slate-100">
                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">כתובת מייל לעדכונים</label>
-                      <input type="email" value={localProfile.email} onChange={e => setLocalProfile({...localProfile, email: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none" />
+                      <input type="email" value={localProfile.email} onChange={e => setLocalProfile({...localProfile, email: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none text-slate-900 font-medium bg-white" />
                    </div>
                 </div>
 

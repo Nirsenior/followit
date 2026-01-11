@@ -76,7 +76,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
             required
             value={profile.firstName}
             onChange={(e) => updateProfile({ firstName: e.target.value })}
-            className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-slate-50/30" 
+            className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-white placeholder:text-slate-300" 
             placeholder="ישראל"
           />
         </div>
@@ -87,7 +87,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
             required
             value={profile.lastName}
             onChange={(e) => updateProfile({ lastName: e.target.value })}
-            className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-slate-50/30" 
+            className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-white placeholder:text-slate-300" 
             placeholder="ישראלי"
           />
         </div>
@@ -99,7 +99,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
           required
           value={profile.email}
           onChange={(e) => updateProfile({ email: e.target.value })}
-          className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-slate-50/30" 
+          className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-white placeholder:text-slate-300" 
           placeholder="email@example.com"
         />
       </div>
@@ -110,7 +110,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
           required
           value={profile.password}
           onChange={(e) => updateProfile({ password: e.target.value })}
-          className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-slate-50/30" 
+          className="p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none text-slate-900 font-medium bg-white placeholder:text-slate-300" 
           placeholder="********"
         />
       </div>
@@ -172,26 +172,29 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
                       <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1">היקף (%)</label>
                       <input 
                         type="number" 
-                        className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium" 
+                        className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white" 
                         value={profile.agreements[company]?.[type]?.scope || ''}
                         onChange={(e) => handleAgreementChange(company, type, 'scope', e.target.value)}
                       />
                     </div>
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1">נפרעים (%)</label>
-                      <input 
-                        type="number" 
-                        className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium" 
-                        value={profile.agreements[company]?.[type]?.ongoing || ''}
-                        onChange={(e) => handleAgreementChange(company, type, 'ongoing', e.target.value)}
-                      />
-                    </div>
+                    {/* Only show Ongoing for non-elementary/non-abroad types as requested */}
+                    {type !== 'elementary' && type !== 'abroad' && (
+                      <div className="flex flex-col">
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1">נפרעים (%)</label>
+                        <input 
+                          type="number" 
+                          className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white" 
+                          value={profile.agreements[company]?.[type]?.ongoing || ''}
+                          onChange={(e) => handleAgreementChange(company, type, 'ongoing', e.target.value)}
+                        />
+                      </div>
+                    )}
                     {(type === 'pension' || type === 'financial') && (
                       <div className="flex flex-col">
                         <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1">ניוד (%)</label>
                         <input 
                           type="number" 
-                          className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium" 
+                          className="p-2.5 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white" 
                           value={profile.agreements[company]?.[type]?.mobility || ''}
                           onChange={(e) => handleAgreementChange(company, type, 'mobility', e.target.value)}
                         />
@@ -243,7 +246,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
             placeholder="0000 0000 0000 0000"
             value={profile.paymentMethod.cardNumber}
             onChange={(e) => updateProfile({ paymentMethod: { ...profile.paymentMethod, cardNumber: e.target.value } })}
-            className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium"
+            className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white placeholder:text-slate-300"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -254,7 +257,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
               placeholder="MM/YY"
               value={profile.paymentMethod.expiry}
               onChange={(e) => updateProfile({ paymentMethod: { ...profile.paymentMethod, expiry: e.target.value } })}
-              className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium"
+              className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white placeholder:text-slate-300"
             />
           </div>
           <div className="flex flex-col">
@@ -264,7 +267,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ onComplete, onBack 
               placeholder="000"
               value={profile.paymentMethod.cvv}
               onChange={(e) => updateProfile({ paymentMethod: { ...profile.paymentMethod, cvv: e.target.value } })}
-              className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium"
+              className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white placeholder:text-slate-300"
             />
           </div>
         </div>
