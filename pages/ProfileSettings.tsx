@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { 
   User, Shield, CreditCard, LogOut, Save, Plus, Trash2, X, AlertTriangle, 
@@ -31,8 +30,13 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
     });
   };
 
+  const removeCompany = (company: string) => {
+    const next = localProfile.selectedCompanies.filter(c => c !== company);
+    setLocalProfile({ ...localProfile, selectedCompanies: next });
+  };
+
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
+    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900" dir="rtl">
       {/* Standardized Sidebar */}
       <aside className="w-72 bg-slate-900 text-white flex flex-col hidden lg:flex">
         <div className="p-8 text-xl font-bold border-b border-slate-800 tracking-tight">
@@ -114,47 +118,61 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
 
             {activeTab === 'agreements' && (
               <div className="space-y-8 animate-fadeIn">
-                {localProfile.selectedCompanies.length === 0 && (
-                  <div className="text-center py-10">
-                    <p className="text-slate-400">טרם בחרת חברות ביטוח בלשונית הפרטים האישיים.</p>
+                {localProfile.selectedCompanies.length === 0 ? (
+                  <div className="text-center py-24 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <p className="text-slate-400 font-medium">טרם בחרת חברות ביטוח בלשונית הפרטים האישיים.</p>
+                    <button onClick={() => setActiveTab('personal')} className="mt-4 text-sky-500 font-bold hover:underline">לחץ כאן לבחירת חברות</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-8">
+                    {localProfile.selectedCompanies.map(company => (
+                      <div key={company} className="bg-slate-50/50 p-8 rounded-3xl border border-slate-200 space-y-6 animate-slideUp">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
+                            <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div> הסכמים: {company}
+                          </h3>
+                          <button 
+                            onClick={() => removeCompany(company)}
+                            className="text-rose-400 hover:text-rose-600 p-2 hover:bg-rose-50 rounded-xl transition-all flex items-center gap-2 text-xs font-bold"
+                            title={`הסר את ${company} מהרשימה`}
+                          >
+                            <Trash2 className="w-4 h-4" /> הסר חברה
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                          {(['private', 'pension', 'elementary', 'financial', 'abroad'] as InsuranceType[]).map(type => (
+                            <div key={type} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                              <h4 className="font-bold text-sm text-sky-600">{INSURANCE_TYPE_LABELS[type]}</h4>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="relative">
+                                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת היקף</label>
+                                  <input type="number" value={localProfile.agreements[company]?.[type]?.scope || ''} onChange={e => {
+                                    const next = {...localProfile.agreements};
+                                    if (!next[company]) next[company] = {};
+                                    next[company][type] = {...(next[company][type] || {}), scope: e.target.value};
+                                    setLocalProfile({...localProfile, agreements: next});
+                                  }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
+                                  <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
+                                </div>
+                                <div className="relative">
+                                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת נפרעים</label>
+                                  <input type="number" value={localProfile.agreements[company]?.[type]?.ongoing || ''} onChange={e => {
+                                    const next = {...localProfile.agreements};
+                                    if (!next[company]) next[company] = {};
+                                    next[company][type] = {...(next[company][type] || {}), ongoing: e.target.value};
+                                    setLocalProfile({...localProfile, agreements: next});
+                                  }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
+                                  <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
-                {localProfile.selectedCompanies.map(company => (
-                  <div key={company} className="bg-slate-50/50 p-8 rounded-3xl border border-slate-200 space-y-6">
-                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
-                      <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div> הסכמים: {company}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {(['private', 'pension', 'elementary', 'financial', 'abroad'] as InsuranceType[]).map(type => (
-                        <div key={type} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                          <h4 className="font-bold text-sm text-sky-600">{INSURANCE_TYPE_LABELS[type]}</h4>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="relative">
-                              <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת היקף</label>
-                              <input type="number" value={localProfile.agreements[company]?.[type]?.scope || ''} onChange={e => {
-                                const next = {...localProfile.agreements};
-                                if (!next[company]) next[company] = {};
-                                next[company][type] = {...(next[company][type] || {}), scope: e.target.value};
-                                setLocalProfile({...localProfile, agreements: next});
-                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
-                              <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
-                            </div>
-                            <div className="relative">
-                              <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת נפרעים</label>
-                              <input type="number" value={localProfile.agreements[company]?.[type]?.ongoing || ''} onChange={e => {
-                                const next = {...localProfile.agreements};
-                                if (!next[company]) next[company] = {};
-                                next[company][type] = {...(next[company][type] || {}), ongoing: e.target.value};
-                                setLocalProfile({...localProfile, agreements: next});
-                              }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
-                              <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
 

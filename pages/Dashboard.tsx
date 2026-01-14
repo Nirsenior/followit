@@ -38,12 +38,13 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
     let totalPremium = 0, totalScope = 0, totalOngoing = 0;
     customerList.forEach(c => {
       c.policies.forEach(p => {
-        if (p.status === 'active') {
+        // Only count policies for companies still in the selected list
+        if (p.status === 'active' && profile.selectedCompanies.includes(p.company)) {
           const premium = getEffectivePremium(p, c.dateOfBirth, targetMonth, targetYear);
           totalPremium += premium;
           const agreement = profile.agreements[p.company]?.[p.type];
-          const ongoingRate = agreement ? parseFloat(agreement.ongoing || '5') / 100 : 0.05;
-          const scopeRate = agreement ? parseFloat(agreement.scope || '10') / 100 : 0.1;
+          const ongoingRate = agreement ? parseFloat(agreement.ongoing || '0') / 100 : 0;
+          const scopeRate = agreement ? parseFloat(agreement.scope || '0') / 100 : 0;
           totalOngoing += premium * ongoingRate; 
           if (!p.isAgentAppointmentOnly) totalScope += premium * 12 * scopeRate; 
         }
@@ -67,16 +68,55 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
   }, [customers, profile]);
 
   const curr = getStatsForPeriod(customers, currentMonth, currentYear);
-  const totalOngoingSum: number = customers.reduce((acc, c) => {
-    return acc + c.policies.filter(p => p.status === 'active').reduce((pAcc, p) => {
-      const premium = getEffectivePremium(p, c.dateOfBirth, currentMonth, currentYear);
-      const rate = profile.agreements[p.company]?.[p.type] ? parseFloat(profile.agreements[p.company]?.[p.type]?.ongoing || '5') / 100 : 0.05;
-      return pAcc + (premium * rate);
-    }, 0);
-  }, 0);
+
+  // Group ongoing by company dynamically based on selected companies
+  const companyBreakdown = useMemo(() => {
+    const totals: Record<string, number> = {};
+    profile.selectedCompanies.forEach(co => totals[co] = 0);
+
+    customers.forEach(c => {
+      c.policies.forEach(p => {
+        if (p.status === 'active' && profile.selectedCompanies.includes(p.company)) {
+          const premium = getEffectivePremium(p, c.dateOfBirth, currentMonth, currentYear);
+          const agreement = profile.agreements[p.company]?.[p.type];
+          const rate = agreement ? parseFloat(agreement.ongoing || '0') / 100 : 0;
+          totals[p.company] += (premium * rate);
+        }
+      });
+    });
+
+    const totalSum = Object.values(totals).reduce((a, b) => a + b, 0);
+    
+    return Object.entries(totals)
+      .map(([name, value]) => ({
+        name,
+        value,
+        percentage: totalSum > 0 ? (value / totalSum) * 100 : 0
+      }))
+      .sort((a, b) => b.value - a.value)
+      .filter(item => item.value > 0 || profile.selectedCompanies.includes(item.name));
+  }, [customers, profile, currentMonth, currentYear]);
+
+  const totalOngoingSum = companyBreakdown.reduce((acc, curr) => acc + curr.value, 0);
+
+  // Colors for chart
+  const CHART_COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#6366f1', '#ec4899', '#94a3b8'];
+
+  // Helper for conic gradient
+  const getConicGradient = () => {
+    if (totalOngoingSum === 0) return '#f1f5f9';
+    let currentPerc = 0;
+    const slices = companyBreakdown.map((item, i) => {
+      const start = currentPerc;
+      const end = currentPerc + item.percentage;
+      currentPerc = end;
+      return `${CHART_COLORS[i % CHART_COLORS.length]} ${start}% ${end}%`;
+    });
+    return `conic-gradient(${slices.join(', ')})`;
+  };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900">
+    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900" dir="rtl">
       <aside className="w-72 bg-slate-900 text-white flex flex-col hidden lg:flex">
         <div className="p-8 text-xl font-bold border-b border-slate-800 tracking-tight">
           Insur<span className="text-sky-400">Agent</span> Pro
@@ -127,7 +167,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
                  return (
                    <div key={i} className="flex-1 flex flex-col items-center group">
                      <div className={`w-full rounded-t-md transition-all duration-500 ${i === 11 ? 'bg-sky-500' : 'bg-slate-100 group-hover:bg-sky-100'}`} style={{ height: `${Math.max(height, 6)}%` }}></div>
-                     <span className="text-[9px] font-bold text-slate-400 mt-3">{s.label}</span>
+                     <span className="text-[9px] font-bold text-slate-400 mt-3" dir="ltr">{s.label}</span>
                    </div>
                  );
                })}
@@ -158,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
           </div>
         </div>
 
-        {/* Ongoing Pie Chart */}
+        {/* Dynamic Ongoing Pie Chart */}
         <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-12">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Wallet className="w-4 h-4 text-emerald-400" /> פילוח עמלות נפרעים מצטבר</h3>
@@ -167,24 +207,32 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
           
           <div className="flex flex-col lg:flex-row items-center justify-around gap-16">
             <div className="relative w-64 h-64 rounded-full flex items-center justify-center border-8 border-slate-50 shadow-inner">
-               <div className="absolute inset-0 rounded-full" style={{ background: totalOngoingSum > 0 ? `conic-gradient(#0ea5e9 0% 35%, #10b981 35% 70%, #0f172a 70% 100%)` : '#f1f5f9' }}></div>
+               <div className="absolute inset-0 rounded-full transition-all duration-700" style={{ background: getConicGradient() }}></div>
                <div className="absolute inset-6 bg-white rounded-full flex flex-col items-center justify-center shadow-md">
-                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">סה״כ מצטבר</span>
+                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">סה״כ נפרעים</span>
                  <span className="text-xl font-bold text-slate-900 tabular-nums">₪{totalOngoingSum.toLocaleString()}</span>
                </div>
             </div>
 
-            <div className="flex-1 max-w-md space-y-3">
-               {INSURANCE_COMPANIES.slice(0,3).map((co, i) => (
-                 <div key={co} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                   <div className="flex items-center gap-3">
-                     <div className={`w-3 h-3 rounded-full ${i===0 ? 'bg-sky-500' : i===1 ? 'bg-emerald-500' : 'bg-slate-900'}`}></div>
-                     <span className="font-bold text-slate-700 text-sm">{co}</span>
+            <div className="flex-1 max-w-md space-y-3 w-full">
+               {companyBreakdown.length === 0 ? (
+                 <p className="text-center text-slate-400 italic py-8">אין נתוני עמלות להצגה. וודא שבחרת חברות בהגדרות והזנת לקוחות.</p>
+               ) : (
+                 companyBreakdown.slice(0, 6).map((item, i) => (
+                   <div key={item.name} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                     <div className="flex items-center gap-3">
+                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}></div>
+                       <span className="font-bold text-slate-700 text-sm">{item.name}</span>
+                     </div>
+                     <div className="flex flex-col items-end">
+                       <span className="text-xs font-bold text-slate-900">₪{item.value.toLocaleString()}</span>
+                       <span className="text-[10px] font-bold text-slate-400">{item.percentage.toFixed(1)}% מהתיק</span>
+                     </div>
                    </div>
-                   <span className="text-xs font-bold text-slate-400">{(35 - i*5)}% מהתיק</span>
-                 </div>
-               ))}
-               <p className="text-[11px] text-slate-400 mt-4 italic text-center">הנתונים מבוססים על לקוחות פעילים והסכמי העמלות האישיים שלך.</p>
+                 ))
+               )}
+               {companyBreakdown.length > 6 && <p className="text-center text-[10px] text-slate-400 pt-2">+ עוד {companyBreakdown.length - 6} חברות נוספות</p>}
+               <p className="text-[11px] text-slate-400 mt-4 italic text-center">הנתונים מבוססים על לקוחות פעילים והסכמי העמלות המוגדרים בפרופיל שלך.</p>
             </div>
           </div>
         </div>
