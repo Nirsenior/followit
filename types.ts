@@ -21,6 +21,7 @@ export interface UserProfile {
     expiry: string;
     cvv: string;
   };
+  isSetupComplete?: boolean;
 }
 
 export const INSURANCE_COMPANIES = [

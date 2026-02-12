@@ -839,7 +839,7 @@ const CustomerJournal: React.FC<{
             <Users className="w-5 h-5" /> יומן לקוחות
           </button>
           <button onClick={() => onNavigate('profile')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
-            <Edit3 className="w-5 h-5" /> עריכת פרופיל
+            <Edit3 className="w-5 h-5" /> פרופיל
           </button>
         </nav>
         <div className="p-6 border-t border-slate-800">

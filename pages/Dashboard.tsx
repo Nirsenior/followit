@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import { 
   TrendingUp, Users, Wallet, Target, ChevronUp, ChevronDown, 
-  LayoutDashboard, Users as UsersIcon, Edit3, LogOut, Bell, Menu
+  LayoutDashboard, Users as UsersIcon, Edit3, LogOut, Bell, Menu, AlertCircle
 } from 'lucide-react';
 import { UserProfile, Customer, INSURANCE_COMPANIES, Policy } from '../types';
 
@@ -129,7 +129,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
             <UsersIcon className="w-5 h-5" /> יומן לקוחות
           </button>
           <button onClick={() => onNavigate('profile')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
-            <Edit3 className="w-5 h-5" /> עריכת פרופיל
+            <Edit3 className="w-5 h-5" /> פרופיל
           </button>
         </nav>
         <div className="p-6 border-t border-slate-800">
@@ -147,11 +147,46 @@ const Dashboard: React.FC<DashboardProps> = ({ profile, customers, onNavigate, o
            </div>
            <div className="flex items-center gap-4">
               <button className="p-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-400 hover:text-sky-500 transition-colors"><Bell className="w-5 h-5" /></button>
-              <div onClick={() => onNavigate('profile')} className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-lg shadow-slate-900/20 uppercase">
-                {profile.firstName[0]}{profile.lastName[0]}
+              
+              <div onClick={() => onNavigate('profile')} className="relative cursor-pointer group">
+                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all shadow-lg uppercase ${
+                    !profile.isSetupComplete 
+                      ? 'bg-white text-slate-900 border-2 border-rose-500'
+                      : 'bg-slate-900 text-white shadow-slate-900/20 hover:scale-105 active:scale-95'
+                 }`}>
+                   {profile.firstName[0]}{profile.lastName[0]}
+                 </div>
+                 
+                 {/* Setup Incomplete Indicator */}
+                 {!profile.isSetupComplete && (
+                   <>
+                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                       <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-white"></span>
+                     </span>
+                     <div className="absolute top-12 left-1/2 -translate-x-1/2 w-48 bg-slate-800 text-white text-xs p-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                       הגדרת הפרופיל לא הושלמה. לחץ להשלמה.
+                     </div>
+                   </>
+                 )}
               </div>
            </div>
         </header>
+
+        {!profile.isSetupComplete && (
+           <div onClick={() => onNavigate('profile')} className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-rose-100 transition-colors animate-slideUp">
+             <div className="flex items-center gap-3">
+               <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-500 shrink-0">
+                 <AlertCircle className="w-5 h-5" />
+               </div>
+               <div>
+                 <h3 className="font-bold text-rose-800">נדרשת השלמת הגדרות פרופיל</h3>
+                 <p className="text-sm text-rose-600">לחץ כאן כדי להגדיר את חברות הביטוח והסכמי העמלות שלך ולהתחיל לעבוד בצורה תקינה.</p>
+               </div>
+             </div>
+             <ChevronDown className="w-5 h-5 text-rose-400 rotate-90" />
+           </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Sales Chart Card */}

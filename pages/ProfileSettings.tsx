@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   User, Shield, CreditCard, LogOut, Save, Plus, Trash2, X, AlertTriangle, 
@@ -17,9 +18,9 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
   const [activeTab, setActiveTab] = useState<'personal' | 'agreements' | 'account'>('personal');
 
   const handleSave = () => { 
-    // Save the changes to the global state
-    setProfile(localProfile); 
-    // Navigate back to the main dashboard (Home screen)
+    // Save the changes to the global state and mark as complete
+    setProfile({ ...localProfile, isSetupComplete: true }); 
+    // Navigate back to the main dashboard
     onNavigate('dashboard');
   };
 
@@ -50,7 +51,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
             <Users className="w-5 h-5" /> יומן לקוחות
           </button>
           <button className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-sky-500 text-white font-bold shadow-lg shadow-sky-500/20">
-            <Edit3 className="w-5 h-5" /> עריכת פרופיל
+            <Edit3 className="w-5 h-5" /> פרופיל
           </button>
         </nav>
         <div className="p-6 border-t border-slate-800">
@@ -65,10 +66,28 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
            <h1 className="text-3xl font-bold tracking-tight text-slate-900">הגדרות חשבון</h1>
            <div className="flex items-center gap-4">
              <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2">
-               <Save className="w-5 h-5" /> שמור שינויים
+               <Save className="w-5 h-5" /> {profile.isSetupComplete ? 'שמור שינויים' : 'סיים הגדרה ושמור'}
              </button>
            </div>
         </header>
+
+        {/* Warning Banner for Incomplete Setup */}
+        {!profile.isSetupComplete && (
+          <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl mb-8 flex items-start gap-4 animate-slideUp">
+             <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
+               <AlertTriangle className="w-6 h-6 text-rose-500" />
+             </div>
+             <div>
+               <h3 className="font-bold text-rose-800 text-lg">הגדרת החשבון טרם הושלמה</h3>
+               <p className="text-rose-600 mt-1">כדי להתחיל לעבוד עם המערכת בצורה תקינה, אנא עבור על הלשוניות מטה:<br/>
+               1. בחר את <b>חברות הביטוח</b> איתן אתה עובד.<br/>
+               2. הגדר את <b>הסכמי העמלות</b> שלך.<br/>
+               3. וודא שפרטי התשלום שלך מעודכנים.<br/>
+               בסיום, לחץ על <b>"סיים הגדרה ושמור"</b>.
+               </p>
+             </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="flex border-b border-slate-100 bg-slate-50/50">

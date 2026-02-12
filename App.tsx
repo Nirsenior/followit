@@ -1,17 +1,19 @@
 
 import React, { useState } from 'react';
 import LandingPage from './pages/LandingPage';
+import SignupPage from './pages/SignupPage';
 import RegistrationPage from './pages/RegistrationPage';
 import CustomerJournal from './pages/CustomerJournal';
 import Dashboard from './pages/Dashboard';
 import ProfileSettings from './pages/ProfileSettings';
 import { UserProfile, Customer } from './types';
 
-type Screen = 'landing' | 'registration' | 'journal' | 'login' | 'dashboard' | 'profile';
+type Screen = 'landing' | 'signup' | 'onboarding' | 'journal' | 'login' | 'dashboard' | 'profile';
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing');
   
+  // Base profile state
   const [profile, setProfile] = useState<UserProfile>({
     firstName: 'ישראל',
     lastName: 'ישראלי',
@@ -21,7 +23,8 @@ const App: React.FC = () => {
       'הראל': { private: { scope: '10', ongoing: '5' }, pension: { scope: '8', ongoing: '1', mobility: '0.5' } },
       'מגדל': { private: { scope: '12', ongoing: '4' }, pension: { scope: '7', ongoing: '1.2' } }
     },
-    paymentMethod: { cardNumber: '4580 **** **** 1234', expiry: '12/28', cvv: '123' }
+    paymentMethod: { cardNumber: '4580 **** **** 1234', expiry: '12/28', cvv: '123' },
+    isSetupComplete: true // Default for demo user
   });
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -29,20 +32,51 @@ const App: React.FC = () => {
   const navigateTo = (screen: Screen) => setCurrentScreen(screen);
   const handleLogout = () => navigateTo('landing');
 
+  // Step 1: User signs up with basic info
+  const handleSignupComplete = (basicInfo: Partial<UserProfile>) => {
+    // New user starts with incomplete setup
+    setProfile(prev => ({ ...prev, ...basicInfo, isSetupComplete: false }));
+    navigateTo('onboarding');
+  };
+
+  // Step 2: User completes onboarding (Excel import or Manual Setup)
+  const handleOnboardingComplete = (newCustomers?: Customer[], extendedProfile?: Partial<UserProfile>) => {
+    if (extendedProfile) {
+      setProfile(prev => ({ ...prev, ...extendedProfile, isSetupComplete: true }));
+    }
+    if (newCustomers && newCustomers.length > 0) {
+      setCustomers(prev => [...prev, ...newCustomers]);
+    }
+    navigateTo('journal'); // Or dashboard
+  };
+
   return (
-    <div className="min-h-screen selection:bg-sky-100 selection:text-sky-900">
+    <div className="min-h-screen selection:bg-sky-100 selection:text-sky-900 font-sans">
       {currentScreen === 'landing' && (
         <LandingPage 
-          onRegister={() => navigateTo('registration')} 
+          onRegister={() => navigateTo('signup')} 
           onLogin={() => navigateTo('login')} 
         />
       )}
-      {currentScreen === 'registration' && (
-        <RegistrationPage 
-          onComplete={() => navigateTo('journal')} 
-          onBack={() => navigateTo('landing')}
+      
+      {/* New Simple Signup Screen */}
+      {currentScreen === 'signup' && (
+        <SignupPage 
+          onSignupSuccess={handleSignupComplete}
+          onLoginClick={() => navigateTo('login')}
         />
       )}
+
+      {/* The Complex Setup Screen (Formerly RegistrationPage) */}
+      {currentScreen === 'onboarding' && (
+        <RegistrationPage 
+          initialProfile={profile}
+          onComplete={handleOnboardingComplete} 
+          onBack={() => navigateTo('signup')}
+          onSkip={() => navigateTo('dashboard')}
+        />
+      )}
+
       {currentScreen === 'journal' && (
         <CustomerJournal 
           profile={profile}
