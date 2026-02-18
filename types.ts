@@ -25,8 +25,12 @@ export interface UserProfile {
 }
 
 export const INSURANCE_COMPANIES = [
-  'הראל', 'מגדל', 'מנורה', 'הפניקס', 'כלל', 'איילון', 'שומרה', 
+  'הראל', 'מגדל', 'מנורה', 'הפניקס', 'כלל', 'איילון', 'שומרה',
   'הכשרה', 'פספורטקארד', 'אלטשולר שחם', 'אינפיניטי', 'מור', 'פסגות'
+];
+
+export const INDIVIDUAL_POLICY_COMPANIES = [
+  'הפניקס', 'הראל', 'כלל', 'מגדל', 'מנורה', 'איילון', 'הכשרה'
 ];
 
 export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
@@ -38,7 +42,7 @@ export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
 };
 
 export const PRIVATE_SUB_POLICIES = [
-  'ניתוחים בחו״ל', 'השתלות בחו״ל', 'תרופות מחוץ לסל', 
+  'ניתוחים בחו״ל', 'השתלות בחו״ל', 'תרופות מחוץ לסל',
   'ניתוחים משלים שב״ן עם השתתפות עצמית', 'ניתוחים משלים שב״ן ללא השתתפות עצמית',
   'ניתוחים שקל ראשון', 'ייעוץ ובדיקות בסיסי', 'ייעוץ ובדיקות מורחב',
   'אבחון מהיר', 'טיפולים בטכנולוגיות מתקדמות ואביזרים',
@@ -60,11 +64,11 @@ export interface Policy {
   monthlyCost: number; // Manual cost or fallback
   premiumSchedule?: PremiumScheduleItem[]; // From Excel
   details: {
-    subPolicies?: Record<string, number>; 
+    subPolicies?: Record<string, number>;
     accumulation?: number;
     deposit?: number;
     mobility?: number;
-    subType?: string; 
+    subType?: string;
   };
   issueDate: string;
   status: 'active' | 'inactive';

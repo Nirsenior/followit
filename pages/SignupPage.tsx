@@ -24,10 +24,10 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
   };
 
   const SocialButton: React.FC<{ provider: 'google' | 'apple'; label: string }> = ({ provider, label }) => (
-    <button 
+    <button
       type="button"
       onClick={() => onSignupSuccess({ firstName: 'User', lastName: 'Social', email: 'user@social.com' })} // Simulating social auth
-      className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-slate-200 font-bold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.99]"
+      className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-200 font-bold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.99] text-sm"
     >
       {provider === 'google' ? (
         <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -38,7 +38,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
         </svg>
       ) : (
         <svg className="w-5 h-5 text-black" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.78.79.05 2.41-1.05 3.96-.86.66.1 2.53.31 3.43 1.6-3.01 1.4-2.48 5.62.37 6.94-.53 1.62-1.37 3.37-2.84 4.51zM12.03 5.37c.7-1.16.59-3.07-.95-4.14-1.38 1.11-1.67 3.08-.95 4.14.7.98 1.2.98 1.9 0z"/>
+          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.78.79.05 2.41-1.05 3.96-.86.66.1 2.53.31 3.43 1.6-3.01 1.4-2.48 5.62.37 6.94-.53 1.62-1.37 3.37-2.84 4.51zM12.03 5.37c.7-1.16.59-3.07-.95-4.14-1.38 1.11-1.67 3.08-.95 4.14.7.98 1.2.98 1.9 0z" />
         </svg>
       )}
       {label}
@@ -48,17 +48,17 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative">
       <div className="absolute top-0 inset-x-0 h-64 bg-slate-900 z-0"></div>
-      
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl relative z-10 overflow-hidden border border-slate-100 animate-slideUp">
-        <div className="p-10 pb-6 text-center">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">יצירת חשבון חדש</h1>
+
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl relative z-10 overflow-hidden border border-slate-100 animate-slideUp">
+        <div className="p-6 pb-4 text-center">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">יצירת חשבון חדש</h1>
           <p className="text-slate-500 text-sm">הצטרפו למאות סוכנים שכבר משתמשים ב-InsurAgent Pro</p>
         </div>
 
-        <div className="px-10 pb-10 space-y-6">
+        <div className="px-6 pb-6 space-y-4">
           <div className="flex flex-col gap-3">
-             <SocialButton provider="google" label="המשך באמצעות Google" />
-             <SocialButton provider="apple" label="המשך באמצעות Apple" />
+            <SocialButton provider="google" label="המשך באמצעות Google" />
+            <SocialButton provider="apple" label="המשך באמצעות Apple" />
           </div>
 
           <div className="flex items-center gap-4">
@@ -69,34 +69,34 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">שם פרטי</label>
-                  <input 
-                    type="text" 
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                    className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium"
-                    required
-                  />
-               </div>
-               <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">שם משפחה</label>
-                  <input 
-                    type="text" 
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                    className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium"
-                  />
-               </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">שם פרטי</label>
+                <input
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">שם משפחה</label>
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium text-sm"
+                />
+              </div>
             </div>
 
             <div>
               <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">כתובת מייל</label>
-              <input 
-                type="email" 
+              <input
+                type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium"
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium text-sm"
                 placeholder="name@example.com"
                 required
               />
@@ -104,19 +104,19 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
 
             <div>
               <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1 uppercase">סיסמה</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium"
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-slate-900 font-medium text-sm"
                 placeholder="לפחות 8 תווים"
                 required
               />
             </div>
 
-            <button 
+            <button
               type="submit"
-              className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:bg-sky-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2"
+              className="w-full py-3 bg-sky-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:bg-sky-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 text-sm"
             >
               צור חשבון <ArrowRight className="w-5 h-5" />
             </button>
@@ -127,9 +127,9 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
           </p>
         </div>
       </div>
-      
+
       <div className="mt-8 text-center text-[10px] text-slate-400 max-w-md">
-        בלחיצה על "צור חשבון" אתה מסכים לתנאי השימוש ומדיניות הפרטיות שלנו. 
+        בלחיצה על "צור חשבון" אתה מסכים לתנאי השימוש ומדיניות הפרטיות שלנו.
       </div>
     </div>
   );

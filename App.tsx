@@ -12,25 +12,34 @@ type Screen = 'landing' | 'signup' | 'onboarding' | 'journal' | 'login' | 'dashb
 
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing');
-  
-  // Base profile state
-  const [profile, setProfile] = useState<UserProfile>({
-    firstName: 'ישראל',
-    lastName: 'ישראלי',
-    email: 'agent@pro.co.il',
-    selectedCompanies: ['הראל', 'מגדל', 'הפניקס'],
-    agreements: {
-      'הראל': { private: { scope: '10', ongoing: '5' }, pension: { scope: '8', ongoing: '1', mobility: '0.5' } },
-      'מגדל': { private: { scope: '12', ongoing: '4' }, pension: { scope: '7', ongoing: '1.2' } }
-    },
-    paymentMethod: { cardNumber: '4580 **** **** 1234', expiry: '12/28', cvv: '123' },
-    isSetupComplete: true // Default for demo user
-  });
 
+  // Empty profile for new sessions
+  const EMPTY_PROFILE: UserProfile = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    selectedCompanies: [],
+    agreements: {},
+    paymentMethod: { cardNumber: '', expiry: '', cvv: '' },
+    isSetupComplete: false
+  };
+
+  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   const navigateTo = (screen: Screen) => setCurrentScreen(screen);
-  const handleLogout = () => navigateTo('landing');
+
+  const handleLogout = () => {
+    setProfile(EMPTY_PROFILE);
+    setCustomers([]);
+    navigateTo('landing');
+  };
+
+  const handleLogin = () => {
+    setProfile(EMPTY_PROFILE);
+    setCustomers([]);
+    navigateTo('dashboard');
+  };
 
   // Step 1: User signs up with basic info
   const handleSignupComplete = (basicInfo: Partial<UserProfile>) => {
@@ -53,15 +62,15 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen selection:bg-sky-100 selection:text-sky-900 font-sans">
       {currentScreen === 'landing' && (
-        <LandingPage 
-          onRegister={() => navigateTo('signup')} 
-          onLogin={() => navigateTo('login')} 
+        <LandingPage
+          onRegister={() => navigateTo('signup')}
+          onLogin={() => navigateTo('login')}
         />
       )}
-      
+
       {/* New Simple Signup Screen */}
       {currentScreen === 'signup' && (
-        <SignupPage 
+        <SignupPage
           onSignupSuccess={handleSignupComplete}
           onLoginClick={() => navigateTo('login')}
         />
@@ -69,25 +78,25 @@ const App: React.FC = () => {
 
       {/* The Complex Setup Screen (Formerly RegistrationPage) */}
       {currentScreen === 'onboarding' && (
-        <RegistrationPage 
+        <RegistrationPage
           initialProfile={profile}
-          onComplete={handleOnboardingComplete} 
+          onComplete={handleOnboardingComplete}
           onBack={() => navigateTo('signup')}
           onSkip={() => navigateTo('dashboard')}
         />
       )}
 
       {currentScreen === 'journal' && (
-        <CustomerJournal 
+        <CustomerJournal
           profile={profile}
           customers={customers}
           setCustomers={setCustomers}
-          onLogout={handleLogout} 
+          onLogout={handleLogout}
           onNavigate={navigateTo}
         />
       )}
       {currentScreen === 'dashboard' && (
-        <Dashboard 
+        <Dashboard
           profile={profile}
           customers={customers}
           onNavigate={navigateTo}
@@ -95,7 +104,7 @@ const App: React.FC = () => {
         />
       )}
       {currentScreen === 'profile' && (
-        <ProfileSettings 
+        <ProfileSettings
           profile={profile}
           setProfile={setProfile}
           onNavigate={navigateTo}
@@ -104,30 +113,30 @@ const App: React.FC = () => {
       )}
       {currentScreen === 'login' && (
         <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-50">
-          <div className="bg-white p-10 rounded-2xl shadow-xl shadow-slate-200/60 max-w-md w-full border border-slate-100 animate-slideUp">
-            <div className="mb-8 text-center">
+          <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 max-w-sm w-full border border-slate-100 animate-slideUp">
+            <div className="mb-4 text-center">
               <div className="text-2xl font-bold text-slate-900 mb-2">InsurAgent Pro</div>
               <div className="text-slate-500 text-sm">התחברות למערכת הניהול המקצועית</div>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1 mr-1 uppercase tracking-wider">דוא״ל</label>
-                <input type="email" placeholder="agent@pro.co.il" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30" />
+                <input type="email" placeholder="agent@pro.co.il" className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 mb-1 mr-1 uppercase tracking-wider">סיסמה</label>
-                <input type="password" placeholder="••••••••" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30" />
+                <input type="password" placeholder="••••••••" className="w-full p-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none transition-all bg-slate-50/30 text-sm" />
               </div>
             </div>
 
-            <button 
-              onClick={() => navigateTo('dashboard')}
-              className="w-full mt-8 bg-sky-500 text-white py-4 rounded-xl font-bold hover:bg-sky-600 active:scale-[0.98] transition-all shadow-lg shadow-sky-500/20"
+            <button
+              onClick={handleLogin}
+              className="w-full mt-6 bg-sky-500 text-white py-3 rounded-xl font-bold hover:bg-sky-600 active:scale-[0.98] transition-all shadow-lg shadow-sky-500/20 text-sm"
             >
               כניסה מאובטחת
             </button>
-            <button 
+            <button
               onClick={() => navigateTo('landing')}
               className="w-full mt-4 text-slate-400 font-medium hover:text-sky-600 text-sm transition-colors"
             >
