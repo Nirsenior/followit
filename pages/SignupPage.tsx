@@ -52,7 +52,7 @@ const SignupPage: React.FC<SignupPageProps> = ({ onSignupSuccess, onLoginClick }
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl relative z-10 overflow-hidden border border-slate-100 animate-slideUp">
         <div className="p-6 pb-4 text-center">
           <h1 className="text-2xl font-bold text-slate-900 mb-2">יצירת חשבון חדש</h1>
-          <p className="text-slate-500 text-sm">הצטרפו למאות סוכנים שכבר משתמשים ב-InsurAgent Pro</p>
+          <p className="text-slate-500 text-sm">הצטרפו למאות סוכנים שכבר משתמשים ב-Followit 360</p>
         </div>
 
         <div className="px-6 pb-6 space-y-4">

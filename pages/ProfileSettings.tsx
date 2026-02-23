@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { 
-  User, Shield, CreditCard, LogOut, Save, Plus, Trash2, X, AlertTriangle, 
-  LayoutDashboard, Users, Edit3
+import {
+  User, Shield, CreditCard, LogOut, Save, Plus, Trash2, X, AlertTriangle,
+  LayoutDashboard, Users, Edit3, Settings2
 } from 'lucide-react';
 import { UserProfile, INSURANCE_COMPANIES, INSURANCE_TYPE_LABELS, InsuranceType } from '../types';
 
@@ -16,10 +16,31 @@ interface ProfileSettingsProps {
 const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, onNavigate, onLogout }) => {
   const [localProfile, setLocalProfile] = useState<UserProfile>(JSON.parse(JSON.stringify(profile)));
   const [activeTab, setActiveTab] = useState<'personal' | 'agreements' | 'account'>('personal');
+  const [agreementStep, setAgreementStep] = useState(1);
+  const [editingCompany, setEditingCompany] = useState<string | null>(null);
+  const [globalAgreements, setGlobalAgreements] = useState<Record<string, { scope?: string, ongoing?: string, mobility?: string }>>({
+    health: {}, life: {}, critical_illness: {}, pension: {}, elementary: {}, financial: {}, abroad: {}
+  });
 
-  const handleSave = () => { 
+  const applyGlobalDefaults = () => {
+    const nextAgreements = { ...localProfile.agreements };
+    localProfile.selectedCompanies.forEach(company => {
+      if (!nextAgreements[company]) nextAgreements[company] = {};
+
+      (Object.keys(globalAgreements) as InsuranceType[]).forEach(type => {
+        nextAgreements[company][type] = {
+          ...nextAgreements[company][type],
+          ...globalAgreements[type]
+        };
+      });
+    });
+    setLocalProfile(prev => ({ ...prev, agreements: nextAgreements }));
+    setAgreementStep(3);
+  };
+
+  const handleSave = () => {
     // Save the changes to the global state and mark as complete
-    setProfile({ ...localProfile, isSetupComplete: true }); 
+    setProfile({ ...localProfile, isSetupComplete: true });
     // Navigate back to the main dashboard
     onNavigate('dashboard');
   };
@@ -41,7 +62,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
       {/* Standardized Sidebar */}
       <aside className="w-72 bg-slate-900 text-white flex flex-col hidden lg:flex">
         <div className="p-8 text-xl font-bold border-b border-slate-800 tracking-tight">
-          Insur<span className="text-sky-400">Agent</span> Pro
+          Followit <span className="text-sky-400">360</span>
         </div>
         <nav className="flex-1 p-6 space-y-2">
           <button onClick={() => onNavigate('dashboard')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
@@ -63,29 +84,29 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
 
       <main className="flex-1 overflow-y-auto p-10 max-w-6xl mx-auto w-full relative">
         <header className="flex justify-between items-center mb-10">
-           <h1 className="text-3xl font-bold tracking-tight text-slate-900">הגדרות חשבון</h1>
-           <div className="flex items-center gap-4">
-             <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2">
-               <Save className="w-5 h-5" /> {profile.isSetupComplete ? 'שמור שינויים' : 'סיים הגדרה ושמור'}
-             </button>
-           </div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">הגדרות חשבון</h1>
+          <div className="flex items-center gap-4">
+            <button onClick={handleSave} className="bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-2">
+              <Save className="w-5 h-5" /> {profile.isSetupComplete ? 'שמור שינויים' : 'סיים הגדרה ושמור'}
+            </button>
+          </div>
         </header>
 
         {/* Warning Banner for Incomplete Setup */}
         {!profile.isSetupComplete && (
           <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl mb-8 flex items-start gap-4 animate-slideUp">
-             <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
-               <AlertTriangle className="w-6 h-6 text-rose-500" />
-             </div>
-             <div>
-               <h3 className="font-bold text-rose-800 text-lg">הגדרת החשבון טרם הושלמה</h3>
-               <p className="text-rose-600 mt-1">כדי להתחיל לעבוד עם המערכת בצורה תקינה, אנא עבור על הלשוניות מטה:<br/>
-               1. בחר את <b>חברות הביטוח</b> איתן אתה עובד.<br/>
-               2. הגדר את <b>הסכמי העמלות</b> שלך.<br/>
-               3. וודא שפרטי התשלום שלך מעודכנים.<br/>
-               בסיום, לחץ על <b>"סיים הגדרה ושמור"</b>.
-               </p>
-             </div>
+            <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6 text-rose-500" />
+            </div>
+            <div>
+              <h3 className="font-bold text-rose-800 text-lg">הגדרת החשבון טרם הושלמה</h3>
+              <p className="text-rose-600 mt-1">כדי להתחיל לעבוד עם המערכת בצורה תקינה, אנא עבור על הלשוניות מטה:<br />
+                1. בחר את <b>חברות הביטוח</b> איתן אתה עובד.<br />
+                2. הגדר את <b>הסכמי העמלות</b> שלך.<br />
+                3. וודא שפרטי התשלום שלך מעודכנים.<br />
+                בסיום, לחץ על <b>"סיים הגדרה ושמור"</b>.
+              </p>
+            </div>
           </div>
         )}
 
@@ -108,88 +129,280 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                 <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם פרטי</label>
-                    <input type="text" value={localProfile.firstName} onChange={e => setLocalProfile({...localProfile, firstName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
+                    <input type="text" value={localProfile.firstName} onChange={e => setLocalProfile({ ...localProfile, firstName: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם משפחה</label>
-                    <input type="text" value={localProfile.lastName} onChange={e => setLocalProfile({...localProfile, lastName: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
+                    <input type="text" value={localProfile.lastName} onChange={e => setLocalProfile({ ...localProfile, lastName: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 transition-all bg-white text-slate-900 font-medium" />
                   </div>
                 </div>
 
-                <div className="space-y-5">
-                   <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2 uppercase tracking-wide">חברות ביטוח בהסדר</h3>
-                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                     {INSURANCE_COMPANIES.map(company => {
-                       const isSelected = localProfile.selectedCompanies.includes(company);
-                       return (
-                         <button key={company} onClick={() => {
-                           const next = isSelected ? localProfile.selectedCompanies.filter(c => c !== company) : [...localProfile.selectedCompanies, company];
-                           setLocalProfile({...localProfile, selectedCompanies: next});
-                         }} className={`p-3 rounded-xl border-2 transition-standard font-bold text-xs ${isSelected ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                           {company}
-                         </button>
-                       );
-                     })}
-                   </div>
-                </div>
               </div>
             )}
 
             {activeTab === 'agreements' && (
               <div className="space-y-8 animate-fadeIn">
-                {localProfile.selectedCompanies.length === 0 ? (
-                  <div className="text-center py-24 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <p className="text-slate-400 font-medium">טרם בחרת חברות ביטוח בלשונית הפרטים האישיים.</p>
-                    <button onClick={() => setActiveTab('personal')} className="mt-4 text-sky-500 font-bold hover:underline">לחץ כאן לבחירת חברות</button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-8">
-                    {localProfile.selectedCompanies.map(company => (
-                      <div key={company} className="bg-slate-50/50 p-8 rounded-3xl border border-slate-200 space-y-6 animate-slideUp">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
-                            <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div> הסכמים: {company}
-                          </h3>
-                          <button 
-                            onClick={() => removeCompany(company)}
-                            className="text-rose-400 hover:text-rose-600 p-2 hover:bg-rose-50 rounded-xl transition-all flex items-center gap-2 text-xs font-bold"
-                            title={`הסר את ${company} מהרשימה`}
-                          >
-                            <Trash2 className="w-4 h-4" /> הסר חברה
+                <div className="flex bg-slate-50 p-1 rounded-2xl mb-8 border border-slate-100 shadow-sm overflow-x-auto">
+                  {[
+                    { id: 1, label: 'חברות' },
+                    { id: 2, label: 'הסכם ברירת מחדל' },
+                    { id: 3, label: 'דיוק והתאמה' }
+                  ].map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setAgreementStep(s.id)}
+                      className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all text-xs whitespace-nowrap ${agreementStep === s.id ? 'bg-slate-900 text-white shadow-lg' :
+                        agreementStep > s.id ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400'
+                        }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
+                {agreementStep === 1 && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <div className="text-center mb-6">
+                      <h2 className="text-xl font-bold text-slate-900">בחר את החברות איתן אתה עובד</h2>
+                      <p className="text-slate-500 text-xs">לחץ על החברות הרלוונטיות כדי להוסיף אותן להסכמי העמלות שלך.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {INSURANCE_COMPANIES.map(company => {
+                        const isSelected = localProfile.selectedCompanies.includes(company);
+                        return (
+                          <button key={company} onClick={() => {
+                            const next = isSelected ? localProfile.selectedCompanies.filter(c => c !== company) : [...localProfile.selectedCompanies, company];
+                            setLocalProfile({ ...localProfile, selectedCompanies: next });
+                          }} className={`p-3 rounded-xl border-2 transition-standard font-bold text-xs ${isSelected ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+                            {company}
                           </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                          {(['private', 'pension', 'elementary', 'financial', 'abroad'] as InsuranceType[]).map(type => (
-                            <div key={type} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                              <h4 className="font-bold text-sm text-sky-600">{INSURANCE_TYPE_LABELS[type]}</h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="relative">
-                                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת היקף</label>
-                                  <input type="number" value={localProfile.agreements[company]?.[type]?.scope || ''} onChange={e => {
-                                    const next = {...localProfile.agreements};
-                                    if (!next[company]) next[company] = {};
-                                    next[company][type] = {...(next[company][type] || {}), scope: e.target.value};
-                                    setLocalProfile({...localProfile, agreements: next});
-                                  }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
-                                  <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
-                                </div>
-                                <div className="relative">
-                                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">עמלת נפרעים</label>
-                                  <input type="number" value={localProfile.agreements[company]?.[type]?.ongoing || ''} onChange={e => {
-                                    const next = {...localProfile.agreements};
-                                    if (!next[company]) next[company] = {};
-                                    next[company][type] = {...(next[company][type] || {}), ongoing: e.target.value};
-                                    setLocalProfile({...localProfile, agreements: next});
-                                  }} className="w-full p-2.5 pl-8 border border-slate-200 rounded-xl outline-none text-slate-900 font-medium bg-white" />
-                                  <span className="absolute left-3 bottom-2.5 text-slate-400 text-xs font-bold">%</span>
-                                </div>
-                              </div>
+                        );
+                      })}
+                    </div>
+                    <div className="pt-6 border-t border-slate-100 flex justify-end">
+                      <button
+                        onClick={() => setAgreementStep(2)}
+                        disabled={localProfile.selectedCompanies.length === 0}
+                        className="px-10 py-3 bg-sky-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:bg-sky-600 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                      >
+                        המשך לשלב הבא
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {agreementStep === 2 && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <div className="text-center mb-8">
+                      <h2 className="text-xl font-bold text-slate-900">הסכם ברירת מחדל (Master Agreement)</h2>
+                      <p className="text-slate-500 text-xs mt-1">הזן את העמלות שאתה מקבל ברוב החברות. זה יחסוך לך המון זמן!</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(['health', 'life', 'critical_illness', 'pension', 'financial', 'elementary', 'abroad'] as InsuranceType[]).map(type => (
+                        <div key={type} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-6 bg-sky-500 rounded-full"></div>
+                            <h4 className="font-bold text-slate-900">{INSURANCE_TYPE_LABELS[type]}</h4>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div className="flex flex-col">
+                              <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">היקף (%)</label>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-slate-50/50 font-bold"
+                                value={globalAgreements[type]?.scope || ''}
+                                onChange={(e) => setGlobalAgreements(prev => ({
+                                  ...prev,
+                                  [type]: { ...prev[type], scope: e.target.value }
+                                }))}
+                              />
                             </div>
-                          ))}
+                            {type !== 'elementary' && type !== 'abroad' && (
+                              <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">נפרעים (%)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-slate-50/50 font-bold"
+                                  value={globalAgreements[type]?.ongoing || ''}
+                                  onChange={(e) => setGlobalAgreements(prev => ({
+                                    ...prev,
+                                    [type]: { ...prev[type], ongoing: e.target.value }
+                                  }))}
+                                />
+                              </div>
+                            )}
+                            {(type === 'pension' || type === 'financial') && (
+                              <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">ניוד (%)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-slate-50/50 font-bold"
+                                  value={globalAgreements[type]?.mobility || ''}
+                                  onChange={(e) => setGlobalAgreements(prev => ({
+                                    ...prev,
+                                    [type]: { ...prev[type], mobility: e.target.value }
+                                  }))}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100 flex justify-between gap-4">
+                      <button onClick={() => setAgreementStep(1)} className="px-8 py-3 text-slate-500 font-bold hover:text-slate-900 transition-colors">חזרה</button>
+                      <button
+                        onClick={applyGlobalDefaults}
+                        className="px-12 py-3.5 bg-sky-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/20 hover:bg-sky-600 active:scale-95 transition-all"
+                      >
+                        החל על כל החברות והמשך
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {agreementStep === 3 && (
+                  <div className="animate-fadeIn space-y-6">
+                    <div className="text-center mb-6">
+                      <h2 className="text-xl font-bold text-slate-900">דיוק והתאמת הסכמים</h2>
+                      <p className="text-slate-500 text-xs">כאן תוכל לערוך חברה ספציפית אם יש לה הסכם שונה מהברירת מחדל הכללית.</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {localProfile.selectedCompanies.map(company => (
+                        <div key={company} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm flex items-center justify-between hover:border-sky-200 transition-all group">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center font-bold text-slate-400 group-hover:bg-sky-50 group-hover:text-sky-500 transition-colors">
+                              {company.charAt(0)}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900">{company}</h4>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-tighter">הסכם מותאם אישית</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingCompany(company)}
+                              className="px-6 py-2 rounded-xl font-bold text-sm transition-all border border-slate-200 text-slate-600 hover:border-sky-500 hover:text-sky-600"
+                            >
+                              עריכה
+                            </button>
+                            <button
+                              onClick={() => removeCompany(company)}
+                              className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100 flex justify-between">
+                      <button onClick={() => setAgreementStep(2)} className="px-8 py-3 text-slate-500 font-bold hover:text-slate-900 transition-colors">חזרה להסכם כללי</button>
+                      <button onClick={handleSave} className="px-10 py-3.5 bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all">סיום ושמירת הכל</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit Drawer Overlay */}
+                {editingCompany && (
+                  <div className="fixed inset-0 z-[100] flex justify-end">
+                    <div
+                      className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-fadeIn"
+                      onClick={() => setEditingCompany(null)}
+                    />
+                    <div className="relative w-full max-w-md bg-white h-full shadow-2xl animate-slideLeft flex flex-col">
+                      <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                          <Settings2 className="w-5 h-5 text-sky-500" />
+                          <h3 className="text-lg font-bold text-slate-900">עריכת הסכם: {editingCompany}</h3>
+                        </div>
+                        <button
+                          onClick={() => setEditingCompany(null)}
+                          className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
+                        >
+                          <X className="w-6 h-6" />
+                        </button>
                       </div>
-                    ))}
+
+                      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                        {(['health', 'life', 'critical_illness', 'pension', 'financial', 'elementary', 'abroad'] as InsuranceType[]).map(type => (
+                          <div key={type} className="bg-sky-50/30 p-5 rounded-2xl border border-sky-100/50 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-bold text-sky-700 text-sm">{INSURANCE_TYPE_LABELS[type]}</h4>
+                              <div className="h-px flex-1 bg-sky-100 mx-4 opacity-50"></div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-4">
+                              <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת היקף (%)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                  value={localProfile.agreements[editingCompany]?.[type]?.scope || ''}
+                                  onChange={(e) => {
+                                    const next = { ...localProfile.agreements };
+                                    if (!next[editingCompany]) next[editingCompany] = {};
+                                    next[editingCompany][type] = { ...(next[editingCompany][type] || {}), scope: e.target.value };
+                                    setLocalProfile({ ...localProfile, agreements: next });
+                                  }}
+                                />
+                              </div>
+                              {type !== 'elementary' && type !== 'abroad' && (
+                                <div className="flex flex-col">
+                                  <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת נפרעים (%)</label>
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                    value={localProfile.agreements[editingCompany]?.[type]?.ongoing || ''}
+                                    onChange={(e) => {
+                                      const next = { ...localProfile.agreements };
+                                      if (!next[editingCompany]) next[editingCompany] = {};
+                                      next[editingCompany][type] = { ...(next[editingCompany][type] || {}), ongoing: e.target.value };
+                                      setLocalProfile({ ...localProfile, agreements: next });
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              {(type === 'pension' || type === 'financial') && (
+                                <div className="flex flex-col">
+                                  <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת ניוד (%)</label>
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                    value={localProfile.agreements[editingCompany]?.[type]?.mobility || ''}
+                                    onChange={(e) => {
+                                      const next = { ...localProfile.agreements };
+                                      if (!next[editingCompany]) next[editingCompany] = {};
+                                      next[editingCompany][type] = { ...(next[editingCompany][type] || {}), mobility: e.target.value };
+                                      setLocalProfile({ ...localProfile, agreements: next });
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="p-6 border-t border-slate-100 bg-slate-50/30">
+                        <button
+                          onClick={() => setEditingCompany(null)}
+                          className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95 transition-all"
+                        >
+                          שמירה וסגירה
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -215,55 +428,55 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                 </div>
 
                 <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                   <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2 uppercase tracking-wide">עריכת פרטי תשלום</h3>
-                   <div className="space-y-4">
-                     <div>
-                       <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">מספר כרטיס אשראי</label>
-                       <input 
-                         type="text" 
-                         value={localProfile.paymentMethod.cardNumber}
-                         onChange={(e) => updatePayment('cardNumber', e.target.value)}
-                         className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
-                         placeholder="0000 0000 0000 0000"
-                       />
-                     </div>
-                     <div className="grid grid-cols-2 gap-4">
-                       <div>
-                         <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">תוקף (MM/YY)</label>
-                         <input 
-                           type="text" 
-                           value={localProfile.paymentMethod.expiry}
-                           onChange={(e) => updatePayment('expiry', e.target.value)}
-                           className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
-                           placeholder="12/28"
-                         />
-                       </div>
-                       <div>
-                         <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">CVV</label>
-                         <input 
-                           type="text" 
-                           value={localProfile.paymentMethod.cvv}
-                           onChange={(e) => updatePayment('cvv', e.target.value)}
-                           className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white" 
-                           placeholder="000"
-                         />
-                       </div>
-                     </div>
-                   </div>
+                  <h3 className="text-sm font-bold text-slate-900 border-b border-slate-50 pb-2 uppercase tracking-wide">עריכת פרטי תשלום</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">מספר כרטיס אשראי</label>
+                      <input
+                        type="text"
+                        value={localProfile.paymentMethod.cardNumber}
+                        onChange={(e) => updatePayment('cardNumber', e.target.value)}
+                        className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white"
+                        placeholder="0000 0000 0000 0000"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">תוקף (MM/YY)</label>
+                        <input
+                          type="text"
+                          value={localProfile.paymentMethod.expiry}
+                          onChange={(e) => updatePayment('expiry', e.target.value)}
+                          className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white"
+                          placeholder="12/28"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 mb-1 block mr-1">CVV</label>
+                        <input
+                          type="text"
+                          value={localProfile.paymentMethod.cvv}
+                          onChange={(e) => updatePayment('cvv', e.target.value)}
+                          className="w-full p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 text-slate-900 font-medium bg-white"
+                          placeholder="000"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-6 pt-6 border-t border-slate-100">
-                   <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">כתובת מייל לעדכונים</label>
-                      <input type="email" value={localProfile.email} onChange={e => setLocalProfile({...localProfile, email: e.target.value})} className="w-full p-4 border border-slate-200 rounded-2xl outline-none text-slate-900 font-medium bg-white" />
-                   </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">כתובת מייל לעדכונים</label>
+                    <input type="email" value={localProfile.email} onChange={e => setLocalProfile({ ...localProfile, email: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl outline-none text-slate-900 font-medium bg-white" />
+                  </div>
                 </div>
 
                 <div className="pt-12 text-center border-t border-slate-50 space-y-4">
-                   <button className="text-rose-500 font-bold hover:bg-rose-50 px-8 py-3 rounded-2xl transition-standard text-xs border border-rose-100">
-                     ביטול מנוי InsurAgent Pro
-                   </button>
-                   <p className="text-[10px] text-slate-400 leading-relaxed max-w-sm mx-auto">שימו לב: ביטול המנוי יפסיק את הגישה ליומן הלקוחות ולמנוע חישוב העמלות באופן מיידי.</p>
+                  <button className="text-rose-500 font-bold hover:bg-rose-50 px-8 py-3 rounded-2xl transition-standard text-xs border border-rose-100">
+                    ביטול מנוי Followit 360
+                  </button>
+                  <p className="text-[10px] text-slate-400 leading-relaxed max-w-sm mx-auto">שימו לב: ביטול המנוי יפסיק את הגישה ליומן הלקוחות ולמנוע חישוב העמלות באופן מיידי.</p>
                 </div>
               </div>
             )}

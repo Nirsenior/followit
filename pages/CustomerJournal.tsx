@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Users, Search, Plus, LogOut, X, Edit3, Trash2, LayoutDashboard,
-  Table as TableIcon, FileText, CheckCircle2, AlertCircle, Save, Download, ChevronDown, ChevronUp, Check, ArrowUpCircle, ArrowRight
+  Table as TableIcon, FileText, CheckCircle2, AlertCircle, Save, Download, ChevronDown, ChevronUp, Check, ArrowUpCircle, ArrowRight,
+  UserPlus, Heart, Baby, ShieldCheck, UploadCloud, Info
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -13,7 +14,9 @@ import {
   Customer,
   Policy,
   UserProfile,
-  PremiumScheduleItem
+  PremiumScheduleItem,
+  FamilyMember,
+  Relationship
 } from '../types';
 import { POLICY_MASTER_LIST } from '../data/policy_master_list';
 
@@ -24,77 +27,209 @@ const ELEMENTARY_OPTIONS = {
   'עסק': ['אחריות מקצועית', 'תכולה', 'צד ג\'', 'מבנה']
 };
 
+/* --- Helpers --- */
+const calculateAge = (dob: string, targetMonth: number, targetYear: number) => {
+  if (!dob) return 0;
+  const birthDate = new Date(dob);
+  let age = targetYear - birthDate.getFullYear();
+  const m = targetMonth - birthDate.getMonth();
+  if (m < 0) age--;
+  return age;
+};
+
+const getEffectivePremium = (policy: Policy, customerDob: string, targetMonth: number, targetYear: number) => {
+  if ((policy.type === 'health' || policy.type === 'life' || policy.type === 'critical_illness') && policy.premiumSchedule && policy.premiumSchedule.length > 0) {
+    const age = calculateAge(customerDob, targetMonth, targetYear);
+    const scheduleItem = policy.premiumSchedule.find(item => item.age === age);
+    return scheduleItem ? scheduleItem.premium : policy.monthlyCost;
+  }
+  return policy.monthlyCost;
+};
+
+const calculateCustomerTotalPremium = (customer: Customer, targetMonth: number, targetYear: number) => {
+  let total = 0;
+  // Primary policies
+  customer.policies.forEach(p => {
+    total += getEffectivePremium(p, customer.dateOfBirth, targetMonth, targetYear);
+  });
+  // Family policies
+  customer.familyMembers?.forEach(fm => {
+    fm.policies.forEach(p => {
+      // Find a reference schedule if shared
+      let scheduleToUse = p.premiumSchedule;
+      if (fm.isPremiumSharedWithPrimary && (!p.premiumSchedule || p.premiumSchedule.length === 0)) {
+        // Find a health/life/critical policy in primary that has a schedule
+        const primaryPrivateWithSchedule = customer.policies.find(pp => (pp.type === 'health' || pp.type === 'life' || pp.type === 'critical_illness') && pp.premiumSchedule && pp.premiumSchedule.length > 0);
+        if (primaryPrivateWithSchedule) {
+          scheduleToUse = primaryPrivateWithSchedule.premiumSchedule;
+        }
+      }
+
+      if ((p.type === 'health' || p.type === 'life' || p.type === 'critical_illness') && scheduleToUse && scheduleToUse.length > 0) {
+        const age = calculateAge(fm.dateOfBirth, targetMonth, targetYear);
+        const scheduleItem = scheduleToUse.find(item => item.age === age);
+        total += scheduleItem ? scheduleItem.premium : p.monthlyCost;
+      } else {
+        total += p.monthlyCost;
+      }
+    });
+  });
+  return total;
+};
+
+
+
 /* --- Sub-Components --- */
 
-const ExcelPremiumUploader: React.FC<{ onScheduleParsed: (schedule: PremiumScheduleItem[]) => void }> = ({ onScheduleParsed }) => {
+const ExcelPremiumUploader: React.FC<{
+  onScheduleParsed: (schedule: PremiumScheduleItem[], columns: string[]) => void,
+  onReset: () => void,
+  hasData: boolean
+}> = ({ onScheduleParsed, onReset, hasData }) => {
   const [data, setData] = useState<any[] | null>(null);
   const [mapping, setMapping] = useState({ age: '', premium: '' });
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const autoMap = (json: any[]) => {
+    if (!json || json.length === 0) return;
+    const firstRow = json[0];
+    const keys = Object.keys(firstRow);
+    const ageKey = keys.find(k => k.includes('גיל') || k.toLowerCase() === 'age');
+    const premiumKey = keys.find(k => k.includes('פרמיה') || k.includes('סכום') || k.toLowerCase().includes('premium'));
+
+    setMapping({
+      age: ageKey || '',
+      premium: premiumKey || ''
+    });
+  };
+
+  const handleFile = (file: File) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       if (!evt.target?.result) return;
-      const wb = XLSX.read(evt.target.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      setData(XLSX.utils.sheet_to_json(ws));
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws);
+        setData(json);
+        autoMap(json);
+      } catch (err) {
+        console.error("Parse error", err);
+      }
     };
     reader.readAsBinaryString(file);
   };
 
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h5 className="text-xs font-bold text-slate-700 flex items-center gap-2">
-          <TableIcon className="w-4 h-4 text-sky-500" /> טבלת התפתחות פרמיה (XLSX)
-        </h5>
-        <button
+    <div className="space-y-3">
+      {!data && !hasData && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={onDrop}
           onClick={() => fileInputRef.current?.click()}
-          className="text-[10px] bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg font-bold hover:border-sky-500 hover:text-sky-600 transition-all"
+          className={`
+            border-2 border-dashed rounded-xl p-6 transition-all cursor-pointer text-center
+            ${isDragging ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:border-sky-400 hover:bg-slate-50'}
+          `}
         >
-          העלה קובץ אקסל
-        </button>
-        <input type="file" ref={fileInputRef} onChange={handleFile} accept=".xlsx, .xls" className="hidden" />
-      </div>
+          <UploadCloud className={`w-10 h-10 mx-auto mb-3 ${isDragging ? 'text-sky-500' : 'text-slate-300'}`} />
+          <div className="text-[13px] font-bold text-slate-700 mb-1">גרור והשלך טבלת התפתחות פרמיה</div>
+          <p className="text-[10px] text-slate-400 font-medium">תומך בקבצי XLSX או XLS בלבד</p>
+          <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} accept=".xlsx, .xls" className="hidden" />
+        </div>
+      )}
 
       {data && (
-        <div className="grid grid-cols-2 gap-4 animate-fadeIn bg-white p-4 rounded-xl border border-slate-200">
-          <div>
-            <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase">עמודת גיל</label>
-            <select
-              value={mapping.age}
-              onChange={(e) => setMapping({ ...mapping, age: e.target.value })}
-              className="w-full p-2 text-[10px] border border-slate-200 rounded-lg outline-none bg-white"
-            >
-              <option value="">בחר...</option>
-              {Object.keys(data[0]).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-4 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h5 className="text-[11px] font-bold text-slate-900 flex items-center gap-2">
+              <TableIcon className="w-4 h-4 text-emerald-500" /> וידוא ופענוח נתונים
+            </h5>
+            <button onClick={() => setData(null)} className="text-[10px] font-bold text-rose-500 hover:underline">ביטול</button>
           </div>
-          <div>
-            <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase">עמודת פרמיה</label>
-            <select
-              value={mapping.premium}
-              onChange={(e) => setMapping({ ...mapping, premium: e.target.value })}
-              className="w-full p-2 text-[10px] border border-slate-200 rounded-lg outline-none bg-white"
-            >
-              <option value="">בחר...</option>
-              {Object.keys(data[0]).map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase">עמודת גיל</label>
+              <select
+                value={mapping.age}
+                onChange={(e) => setMapping({ ...mapping, age: e.target.value })}
+                className="w-full p-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-bold"
+              >
+                <option value="">בחר...</option>
+                {Object.keys(data[0]).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[9px] font-bold text-slate-400 mb-1 block uppercase">עמודת פרמיה</label>
+              <select
+                value={mapping.premium}
+                onChange={(e) => setMapping({ ...mapping, premium: e.target.value })}
+                className="w-full p-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-bold"
+              >
+                <option value="">בחר...</option>
+                {Object.keys(data[0]).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
+
+          {/* Mini Preview Table */}
+          <div className="border border-slate-100 rounded-lg overflow-hidden bg-slate-50/50">
+            <table className="w-full text-right text-[10px]">
+              <thead className="bg-slate-100 text-slate-500 font-bold">
+                <tr>
+                  <th className="p-1 px-3">גיל</th>
+                  <th className="p-1 px-3">פרמיה</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-700">
+                {data.slice(0, 5).map((row, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="p-1 px-3 font-bold">{row[mapping.age] || '-'}</td>
+                    <td className="p-1 px-3 font-bold">₪{row[mapping.premium] || '0'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {data.length > 5 && <div className="p-1 text-center text-[8px] text-slate-400 font-bold bg-white border-t border-slate-100">+{data.length - 5} שורות נוספות</div>}
+          </div>
+
           <button
             onClick={() => {
               const schedule = data.map(row => ({
                 age: parseInt(row[mapping.age]),
                 premium: parseFloat(String(row[mapping.premium]).replace(/[^\d.]/g, ''))
               })).filter(i => !isNaN(i.age) && !isNaN(i.premium));
-              onScheduleParsed(schedule);
+
+              const columns = Object.keys(data[0]).filter(k => k !== mapping.age);
+              onScheduleParsed(schedule, columns);
               setData(null);
             }}
-            className="col-span-2 bg-sky-500 text-white py-2 rounded-lg font-bold text-[10px] shadow-md"
+            className="w-full bg-emerald-500 text-white py-2.5 rounded-lg font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
           >
-            טען נתונים
+            אישור וטעינת הטבלה למערכת
+          </button>
+        </div>
+      )}
+
+      {hasData && !data && (
+        <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-emerald-800">טבלת פרמיה נטענה בהצלחה</span>
+          </div>
+          <button onClick={onReset} className="text-rose-500 hover:text-rose-600">
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -110,15 +245,18 @@ const PolicyConfigurator: React.FC<{
   setCurrentInputs: (i: any) => void;
   onAddPolicy: () => void;
   buttonLabel: string;
-}> = ({ activeTab, setActiveTab, profile, currentInputs, setCurrentInputs, onAddPolicy, buttonLabel }) => {
+  layout?: 'default' | 't-shape';
+}> = ({ activeTab, setActiveTab, profile, currentInputs, setCurrentInputs, onAddPolicy, buttonLabel, layout = 'default' }) => {
   const [elementaryCategory, setElementaryCategory] = useState<'רכב' | 'דירה' | 'עסק'>('רכב');
   const [elementaryCoverage, setElementaryCoverage] = useState<string>('מקיף');
   const [elementaryAmount, setElementaryAmount] = useState<number>(0);
 
+  const [isManualEntry, setIsManualEntry] = useState(false);
+
   useEffect(() => {
     if (activeTab === 'elementary' && currentInputs.details?.elementaryCategory) {
       setElementaryCategory(currentInputs.details.elementaryCategory);
-      setElementaryCoverage(currentInputs.details.elementaryCoverage || ELEMENTARY_OPTIONS[currentInputs.details.elementaryCategory as keyof typeof ELEMENTARY_OPTIONS][0]);
+      setElementaryCoverage(currentInputs.details.elementaryCoverage || ELEMENTARY_OPTIONS[elementaryCategory][0]);
       setElementaryAmount(currentInputs.cost || 0);
     }
   }, [activeTab, currentInputs.id]);
@@ -133,7 +271,6 @@ const PolicyConfigurator: React.FC<{
     }
   };
 
-  // Determine which insurance types (tabs) are active in the profile
   const activeInsuranceTypes = useMemo(() => {
     const types = new Set<InsuranceType>();
     profile.selectedCompanies.forEach(company => {
@@ -145,107 +282,86 @@ const PolicyConfigurator: React.FC<{
         }
       });
     });
-    // Ensure the order matches INSURANCE_TYPE_LABELS
     return (Object.keys(INSURANCE_TYPE_LABELS) as InsuranceType[]).filter(t => types.has(t));
   }, [profile]);
 
-  // Determine which companies are available for the current tab
   const filteredCompaniesUnderTab = useMemo(() => {
     return profile.selectedCompanies.filter(company => {
       const agreement = profile.agreements[company]?.[activeTab];
       const isActivated = agreement && (agreement.scope || agreement.ongoing || agreement.mobility);
       if (!isActivated) return false;
-
-      // For Individual Policies, also intersect with the master list support
-      if (activeTab === 'private') {
+      if (activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') {
         return INDIVIDUAL_POLICY_COMPANIES.includes(company);
       }
       return true;
     });
   }, [profile, activeTab]);
 
-  return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-      <div className="flex bg-slate-50 border-b border-slate-200 p-1">
-        {activeInsuranceTypes.map(type => (
-          <button
-            key={type}
-            onClick={() => {
-              setActiveTab(type);
-              // Reset company when switching tabs if the current company isn't valid for the new tab
-              // However, keep it if it is valid. 
-              // For simplicity, reset company to ensure fresh state
-              setCurrentInputs({
-                ...currentInputs,
-                company: '',
-                details: { ...currentInputs.details, subPolicies: {} }
-              });
-            }}
-            className={`flex-1 py-3 px-2 rounded-xl text-xs font-bold transition-standard ${activeTab === type ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            {INSURANCE_TYPE_LABELS[type]}
-          </button>
-        ))}
-        {activeInsuranceTypes.length === 0 && (
-          <div className="p-3 text-[10px] text-slate-400 font-bold italic w-full text-center">אין הסכמים פעילים בפרופיל</div>
-        )}
-      </div>
-
-      <div className="p-5 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 mb-1 block mr-1 uppercase">חברת ביטוח</label>
-            <select
-              value={currentInputs.company}
-              onChange={e => {
-                const newCompany = e.target.value;
-                // If switching company in 'private' tab, we must reset sub-policies to avoid legacy data
-                if (activeTab === 'private') {
-                  setCurrentInputs({
-                    ...currentInputs,
-                    company: newCompany,
-                    details: { ...currentInputs.details, subPolicies: {} }
-                  });
-                } else {
-                  setCurrentInputs({ ...currentInputs, company: newCompany });
-                }
-              }}
-              className="w-full p-2 border border-slate-200 rounded-xl outline-none bg-white text-slate-900 font-medium text-xs"
-            >
-              <option value="" disabled>בחר חברה...</option>
-              {filteredCompaniesUnderTab.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end pb-3">
-            <label className="flex items-center gap-3 cursor-pointer group">
-              <input type="checkbox" checked={currentInputs.isAgentAppointment} onChange={e => setCurrentInputs({ ...currentInputs, isAgentAppointment: e.target.checked })} className="w-5 h-5 accent-sky-500 rounded border-slate-200" />
-              <span className="text-sm font-bold text-slate-600 group-hover:text-slate-900 transition-colors">מינוי סוכן בלבד (נפרעים בלבד)</span>
-            </label>
-          </div>
-        </div>
-
-        <div className="pt-6 border-t border-slate-50">
-          {activeTab === 'private' && (
-            <div className="space-y-6 animate-fadeIn">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-slate-900">פירוט פוליסת פרט - {currentInputs.company || 'נא לבחור חברה'}</h4>
+  const renderContent = () => {
+    return (
+      <div className="pt-4 border-t border-slate-100">
+        {(activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <h4 className="text-[13px] font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-sky-500" />
+                  פירוט פוליסת פרט - {currentInputs.company || 'נא לבחור חברה'}
+                </h4>
                 {currentInputs.company && (
-                  <span className="text-[10px] bg-sky-50 text-sky-600 px-2 py-1 rounded-full font-bold uppercase">רשימה מפוקחת</span>
+                  <span className="text-[10px] text-slate-400 font-medium">רשימת פוליסות מבוססת הסכם חברה</span>
                 )}
               </div>
+              {currentInputs.company !== 'שלמה' && (
+                <button
+                  onClick={() => setIsManualEntry(!isManualEntry)}
+                  className="text-[10px] font-bold text-sky-600 hover:text-sky-700 underline underline-offset-4"
+                >
+                  {isManualEntry ? 'חזרה להעלאת אקסל' : 'הזנה ידנית במקום אקסל'}
+                </button>
+              )}
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+            {currentInputs.company === 'שלמה' ? (
+              <div className="p-8 bg-amber-50 rounded-2xl border-2 border-dashed border-amber-200 text-center space-y-3 animate-pulse">
+                <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
+                <div className="space-y-1">
+                  <h5 className="text-sm font-bold text-amber-900">שימו לב: שלמה חברה לביטוח</h5>
+                  <p className="text-[11px] text-amber-700 font-medium max-w-xs mx-auto leading-relaxed">
+                    חברה זו אינה משווקת ביטוחי בריאות (פרט).
+                    ניתן להפיק דרכה ביטוחי רכב, דירה, עסק וחו"ל בלבד.
+                  </p>
+                </div>
+              </div>
+            ) : !isManualEntry ? (
+              <div className="space-y-4">
+                <ExcelPremiumUploader
+                  hasData={!!(currentInputs.premiumSchedule && currentInputs.premiumSchedule.length > 0)}
+                  onScheduleParsed={(sched, cols) => setCurrentInputs({ ...currentInputs, premiumSchedule: sched, excelColumns: cols })}
+                  onReset={() => setCurrentInputs({ ...currentInputs, premiumSchedule: [], excelColumns: [] })}
+                />
+
+                {(!currentInputs.premiumSchedule || currentInputs.premiumSchedule.length === 0) && (
+                  <div className="p-4 bg-sky-50 rounded-xl border border-sky-100 flex gap-3">
+                    <Info className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-sky-700 leading-relaxed font-medium">
+                      העלאת טבלת התפתחות פרמיה היא הדרך המומלצת להבטיח חישוב עמלת נפרעים מדויק לאורך שנים.
+                      המערכת תדע לחשב את העמלה הצפויה בכל גיל באופן אוטומטי.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
                 {(currentInputs.company && POLICY_MASTER_LIST[currentInputs.company]
                   ? POLICY_MASTER_LIST[currentInputs.company]
                   : []).map(sub => (
                     <div key={sub} className="flex items-center justify-between group">
-                      <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors text-right flex-1 ml-4 leading-snug">{sub}</span>
+                      <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors text-right flex-1 ml-4 leading-tight font-medium">{sub}</span>
                       <div className="relative w-28 shrink-0">
                         <input
                           type="number"
-                          className="w-full p-1.5 pl-6 border border-slate-200 rounded-lg text-[11px] outline-none focus:border-sky-500 bg-white shadow-sm"
+                          className="w-full p-1.5 pl-7 border border-slate-200 rounded-lg text-xs outline-none focus:border-sky-500 bg-white shadow-sm transition-all font-bold"
                           placeholder="0"
                           value={currentInputs.details.subPolicies?.[sub] || ''}
                           onChange={(e) => {
@@ -259,100 +375,390 @@ const PolicyConfigurator: React.FC<{
                             });
                           }}
                         />
-                        <span className="absolute left-1.5 top-1.5 text-[10px] text-slate-300 font-bold">₪</span>
+                        <span className="absolute left-2 top-1.5 text-[10px] text-slate-300 font-bold">₪</span>
                       </div>
                     </div>
                   ))}
 
                 {(!currentInputs.company) && (
-                  <div className="col-span-2 py-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                    <div className="text-slate-400 font-bold text-sm">בחר חברת ביטוח כדי לראות את רשימת הפוליסות</div>
+                  <div className="col-span-2 py-8 text-center bg-white rounded-xl border-2 border-dashed border-slate-200">
+                    <div className="text-slate-400 font-bold text-xs">בחר חברת ביטוח כדי להזין נתונים ידנית</div>
                   </div>
                 )}
               </div>
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                <ExcelPremiumUploader onScheduleParsed={(sched) => setCurrentInputs({ ...currentInputs, premiumSchedule: sched })} />
+            )}
+          </div>
+        )}
+
+        {activeTab === 'elementary' && (
+          <div className="space-y-4 animate-fadeIn">
+            <h4 className="text-[13px] font-bold text-slate-900">פירוט אלמנטרי</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">קטגוריה</label>
+                <select
+                  value={elementaryCategory}
+                  onChange={e => {
+                    const cat = e.target.value as any;
+                    setElementaryCategory(cat);
+                    setElementaryCoverage(ELEMENTARY_OPTIONS[cat][0]);
+                  }}
+                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
+                >
+                  <option value="רכב">ביטוח רכב</option>
+                  <option value="דירה">ביטוח דירה</option>
+                  <option value="עסק">ביטוח עסק</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">כיסוי</label>
+                <select
+                  value={elementaryCoverage}
+                  onChange={e => setElementaryCoverage(e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
+                >
+                  {(ELEMENTARY_OPTIONS[elementaryCategory] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום חופשי (₪)</label>
+                <input
+                  type="number"
+                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
+                  placeholder="0"
+                  value={elementaryAmount || ''}
+                  onChange={e => setElementaryAmount(parseFloat(e.target.value) || 0)}
+                />
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {activeTab === 'elementary' && (
-            <div className="space-y-6 animate-fadeIn">
-              <h4 className="text-sm font-bold text-slate-900">פירוט אלמנטרי</h4>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">קטגוריה</label>
-                  <select
-                    value={elementaryCategory}
-                    onChange={e => {
-                      const cat = e.target.value as any;
-                      setElementaryCategory(cat);
-                      setElementaryCoverage(ELEMENTARY_OPTIONS[cat][0]);
-                    }}
-                    className="w-full p-3 border border-slate-200 rounded-xl bg-white text-xs font-bold"
-                  >
-                    <option value="רכב">ביטוח רכב</option>
-                    <option value="דירה">ביטוח דירה</option>
-                    <option value="עסק">ביטוח עסק</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">כיסוי</label>
-                  <select
-                    value={elementaryCoverage}
-                    onChange={e => setElementaryCoverage(e.target.value)}
-                    className="w-full p-3 border border-slate-200 rounded-xl bg-white text-xs font-bold"
-                  >
-                    {(ELEMENTARY_OPTIONS[elementaryCategory] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">סכום חופשי (₪)</label>
-                  <input
-                    type="number"
-                    className="w-full p-3 border border-slate-200 rounded-xl bg-white text-xs font-bold"
-                    placeholder="0"
-                    value={elementaryAmount || ''}
-                    onChange={e => setElementaryAmount(parseFloat(e.target.value) || 0)}
-                  />
-                </div>
+        {(activeTab === 'pension' || activeTab === 'financial') && (
+          <div className="space-y-4 animate-fadeIn">
+            <h4 className="text-[13px] font-bold text-slate-900 uppercase">הזנת סכומים: {INSURANCE_TYPE_LABELS[activeTab]}</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום צבירה</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.accumulation || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, accumulation: parseFloat(e.target.value) || 0 } })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום הפקדה</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.deposit || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, deposit: parseFloat(e.target.value) || 0 } })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום ניוד</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.mobility || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, mobility: parseFloat(e.target.value) || 0 } })} />
               </div>
             </div>
-          )}
-
-          {(activeTab === 'pension' || activeTab === 'financial') && (
-            <div className="space-y-6 animate-fadeIn">
-              <h4 className="text-sm font-bold text-slate-900">הזנת סכומים: {INSURANCE_TYPE_LABELS[activeTab]}</h4>
-              <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">סכום צבירה</label>
-                  <input type="number" className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={currentInputs.details.accumulation || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, accumulation: parseFloat(e.target.value) || 0 } })} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">סכום הפקדה</label>
-                  <input type="number" className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={currentInputs.details.deposit || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, deposit: parseFloat(e.target.value) || 0 } })} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 block">סכום ניוד</label>
-                  <input type="number" className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={currentInputs.details.mobility || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, mobility: parseFloat(e.target.value) || 0 } })} />
-                </div>
-              </div>
-              <div className="text-[10px] text-slate-400 italic mt-4">הזן פרמיה חודשית כללית לחישוב עמלה (אם קיימת):</div>
-              <input type="number" placeholder="פרמיה חודשית (₪)" className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={currentInputs.cost || ''} onChange={e => setCurrentInputs({ ...currentInputs, cost: parseFloat(e.target.value) || 0 })} />
+            <div className="space-y-2 pt-2">
+              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mr-1">פרמיה חודשית כללית לחישוב עמלה (אם קיימת):</div>
+              <input type="number" placeholder="פרמיה חודשית (₪)" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.cost || ''} onChange={e => setCurrentInputs({ ...currentInputs, cost: parseFloat(e.target.value) || 0 })} />
             </div>
-          )}
+          </div>
+        )}
 
-          {activeTab === 'abroad' && (
-            <div className="space-y-4 animate-fadeIn">
-              <label className="text-sm font-bold text-slate-900 block">עלות חודשית משוערת / פרמיה</label>
-              <input type="number" className="w-full p-3 border border-slate-200 rounded-xl bg-white" value={currentInputs.cost || ''} onChange={e => setCurrentInputs({ ...currentInputs, cost: parseFloat(e.target.value) || 0 })} />
-            </div>
-          )}
+        {activeTab === 'abroad' && (
+          <div className="space-y-3 animate-fadeIn">
+            <label className="text-[13px] font-bold text-slate-900 block">עלות חודשית משוערת / פרמיה</label>
+            <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" placeholder="0" value={currentInputs.cost || ''} onChange={e => setCurrentInputs({ ...currentInputs, cost: parseFloat(e.target.value) || 0 })} />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (layout === 't-shape') {
+    return (
+      <div className="flex gap-6 h-full">
+        {/* Left Side - Policy Type List */}
+        <div className="w-52 shrink-0 space-y-2">
+          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-2 mr-1">סוג כיסוי</label>
+          {activeInsuranceTypes.map(type => (
+            <button
+              key={type}
+              onClick={() => {
+                setActiveTab(type);
+                setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, subPolicies: {} } });
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl border-2 transition-all font-bold text-xs ${activeTab === type ? 'bg-white border-slate-900 text-slate-900 shadow-md transform scale-[1.01]' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+            >
+              <span>{INSURANCE_TYPE_LABELS[type]}</span>
+              {activeTab === type && <CheckCircle2 className="w-3.5 h-3.5 text-sky-500" />}
+            </button>
+          ))}
         </div>
 
-        <div className="pt-6 border-t border-slate-100 flex justify-end">
-          <button onClick={handleAdd} className="bg-sky-50 text-sky-600 px-6 py-2 rounded-xl font-bold hover:bg-sky-100 transition-all flex items-center gap-2 text-sm">
-            <Plus className="w-4 h-4" /> {buttonLabel}
+        {/* Center - Company and Details */}
+        <div className="flex-1 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mr-1">חברת ביטוח</label>
+              <select
+                value={currentInputs.company}
+                onChange={e => {
+                  const newCompany = e.target.value;
+                  if (activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') {
+                    setCurrentInputs({ ...currentInputs, company: newCompany, details: { ...currentInputs.details, subPolicies: {} } });
+                  } else {
+                    setCurrentInputs({ ...currentInputs, company: newCompany });
+                  }
+                }}
+                className="w-full p-2.5 border border-slate-200 rounded-xl outline-none bg-white text-slate-900 font-bold text-xs shadow-sm focus:border-sky-500 transition-all"
+              >
+                <option value="" disabled>בחר חברה...</option>
+                {filteredCompaniesUnderTab.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
+            <div className="h-full flex items-center pt-3.5">
+              <label className="flex items-center gap-3 cursor-pointer group bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm hover:border-sky-500 transition-all w-full">
+                <input type="checkbox" checked={currentInputs.isAgentAppointment} onChange={e => setCurrentInputs({ ...currentInputs, isAgentAppointment: e.target.checked })} className="w-5 h-5 accent-sky-500 rounded-lg border-slate-200" />
+                <div className="text-right">
+                  <span className="text-xs font-bold text-slate-700 block group-hover:text-slate-900">מינוי סוכן בלבד</span>
+                  <span className="text-[9px] text-slate-400 font-medium">פוליסה קיימת (נפרעים בלבד)</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xl shadow-slate-200/50">
+            {renderContent()}
+            <div className="pt-4 mt-4 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={handleAdd}
+                className="bg-sky-500 text-white px-6 py-2 rounded-xl font-black hover:bg-sky-600 transition-all flex items-center gap-2 text-sm shadow-lg shadow-sky-500/30 active:scale-95"
+              >
+                <Plus className="w-6 h-6" /> {buttonLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="flex bg-slate-50 border-b border-slate-200 p-1">
+        {activeInsuranceTypes.map(type => (
+          <button
+            key={type}
+            onClick={() => {
+              setActiveTab(type);
+              setCurrentInputs({ ...currentInputs, company: '', details: { ...currentInputs.details, subPolicies: {} } });
+            }}
+            className={`flex-1 py-3 px-2 rounded-xl text-xs font-bold transition-standard ${activeTab === type ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            {INSURANCE_TYPE_LABELS[type]}
+          </button>
+        ))}
+        {activeInsuranceTypes.length === 0 && (
+          <div className="p-3 text-[10px] text-slate-400 font-bold italic w-full text-center">אין הסכמים פעילים בפרופיל</div>
+        )}
+      </div>
+
+      <div className="p-8 space-y-8">
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">חברת ביטוח</label>
+            <select
+              value={currentInputs.company}
+              onChange={e => {
+                const newCompany = e.target.value;
+                if (activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') {
+                  setCurrentInputs({ ...currentInputs, company: newCompany, details: { ...currentInputs.details, subPolicies: {} } });
+                } else {
+                  setCurrentInputs({ ...currentInputs, company: newCompany });
+                }
+              }}
+              className="w-full p-3 border border-slate-200 rounded-xl outline-none bg-white text-slate-900 font-medium text-sm"
+            >
+              <option value="" disabled>בחר חברה...</option>
+              {filteredCompaniesUnderTab.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex items-end pb-4">
+            <label className="flex items-center gap-4 cursor-pointer group">
+              <input type="checkbox" checked={currentInputs.isAgentAppointment} onChange={e => setCurrentInputs({ ...currentInputs, isAgentAppointment: e.target.checked })} className="w-6 h-6 accent-sky-500 rounded-lg border-slate-200" />
+              <span className="text-base font-bold text-slate-600 group-hover:text-slate-900 transition-colors">מינוי סוכן בלבד (נפרעים בלבד)</span>
+            </label>
+          </div>
+        </div>
+
+        {renderContent()}
+
+        <div className="pt-8 border-t border-slate-100 flex justify-end">
+          <button onClick={handleAdd} className="bg-sky-50 text-sky-600 px-8 py-3 rounded-2xl font-bold hover:bg-sky-100 transition-all flex items-center gap-2 text-base shadow-sm">
+            <Plus className="w-5 h-5" /> {buttonLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AddFamilyMemberModal: React.FC<{
+  onClose: () => void,
+  onSubmit: (member: FamilyMember) => void,
+  profile: UserProfile,
+  primaryDOB: string
+}> = ({ onClose, onSubmit, profile, primaryDOB }) => {
+  const [form, setForm] = useState<Omit<FamilyMember, 'policies'>>({
+    id: '',
+    firstName: '',
+    lastName: '',
+    dateOfBirth: '',
+    relationship: 'child',
+    isPremiumSharedWithPrimary: false
+  });
+
+  const [policies, setPolicies] = useState<Policy[]>([]);
+
+  const activeInsuranceTypes = useMemo(() => {
+    const types = new Set<InsuranceType>();
+    profile.selectedCompanies.forEach(company => {
+      const companyAgreements = profile.agreements[company] || {};
+      Object.keys(companyAgreements).forEach(type => {
+        const agreement = companyAgreements[type as InsuranceType];
+        if (agreement && (agreement.scope || agreement.ongoing || agreement.mobility)) {
+          types.add(type as InsuranceType);
+        }
+      });
+    });
+    return Array.from(types);
+  }, [profile]);
+
+  const [activeTab, setActiveTab] = useState<InsuranceType>(activeInsuranceTypes[0] || 'health');
+  const [currentInputs, setCurrentInputs] = useState<any>({
+    company: '',
+    cost: 0,
+    isAgentAppointment: false,
+    premiumSchedule: [] as PremiumScheduleItem[],
+    details: { subPolicies: {} } as any
+  });
+
+  const handleAddPolicyToMember = () => {
+    if (!currentInputs.company) return alert('נא לבחור חברת ביטוח');
+    let totalCost = currentInputs.cost;
+    if ((activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && currentInputs.details.subPolicies) {
+      totalCost = Object.values(currentInputs.details.subPolicies as Record<string, number>).reduce((a, b) => a + (parseFloat(b as any) || 0), 0);
+    }
+    const newPolicy: Policy = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: activeTab,
+      company: currentInputs.company,
+      isAgentAppointmentOnly: currentInputs.isAgentAppointment,
+      monthlyCost: totalCost,
+      premiumSchedule: currentInputs.premiumSchedule,
+      excelColumns: currentInputs.excelColumns,
+      details: { ...currentInputs.details },
+      issueDate: new Date().toLocaleDateString('he-IL'),
+      status: 'active'
+    };
+    setPolicies([...policies, newPolicy]);
+    setCurrentInputs({ ...currentInputs, cost: 0, isAgentAppointment: false, premiumSchedule: [], details: { subPolicies: {} } });
+  };
+
+  const isChild = form.relationship === 'child';
+  const age = useMemo(() => {
+    if (!form.dateOfBirth) return 0;
+    const birthDate = new Date(form.dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age;
+  }, [form.dateOfBirth]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-fadeIn" dir="rtl">
+      <div className="bg-white w-full max-w-7xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-slideUp">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <UserPlus className="w-7 h-7 text-sky-500" /> הוספת בן משפחה
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-standard text-slate-400"><X /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-10 bg-white">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="space-y-6">
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-200">פרטים אישיים</h3>
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">קשר משפחתי</label>
+                    <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value as Relationship })} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm font-bold">
+                      <option value="spouse">בן/בת זוג</option>
+                      <option value="child">ילד/ה</option>
+                      <option value="other">אחר</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">שם פרטי</label>
+                      <input type="text" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">שם משפחה</label>
+                      <input type="text" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm font-bold" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">תאריך הנפקה</label>
+                    <input type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm font-bold" />
+                  </div>
+                  {isChild && age < 18 && (
+                    <div className="bg-sky-50 p-4 rounded-xl border border-sky-100">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" checked={form.isPremiumSharedWithPrimary} onChange={e => setForm({ ...form, isPremiumSharedWithPrimary: e.target.checked })} className="w-5 h-5 accent-sky-500 rounded border-slate-200" />
+                        <span className="text-xs font-bold text-sky-700">שתף טבלת התפתחות פרמיה עם המבוטח הראשי</span>
+                      </label>
+                      <p className="text-[9px] text-sky-600/70 mt-2 leading-relaxed">עבור ילדים מתחת לגיל 18, ניתן להשתמש באותה טבלת אקסל של ההורה לחישובים.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">פוליסות שנוספו ({policies.length})</h4>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {policies.map((p, idx) => (
+                    <div key={p.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center group">
+                      <div className="text-right">
+                        <div className="font-bold text-xs text-slate-900">{p.company} • {INSURANCE_TYPE_LABELS[p.type]}</div>
+                        <div className="text-[10px] text-slate-500">₪{p.monthlyCost.toLocaleString()}</div>
+                      </div>
+                      <button onClick={() => setPolicies(policies.filter((_, i) => i !== idx))} className="text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 space-y-6">
+              <PolicyConfigurator
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                profile={profile}
+                currentInputs={currentInputs}
+                setCurrentInputs={setCurrentInputs}
+                onAddPolicy={handleAddPolicyToMember}
+                buttonLabel="הוסף פוליסה לבן המשפחה"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 border-t border-slate-100 bg-white flex justify-end gap-4 shrink-0">
+          <button onClick={onClose} className="px-10 py-4 font-bold text-slate-400 hover:text-slate-600 transition-colors text-base">ביטול</button>
+          <button
+            disabled={!form.firstName || !form.dateOfBirth}
+            onClick={() => onSubmit({ ...form, policies } as FamilyMember)}
+            className="px-14 py-4 bg-sky-500 text-white font-bold rounded-2xl shadow-xl shadow-sky-500/20 hover:bg-sky-600 disabled:opacity-30 active:scale-[0.98] transition-all text-base"
+          >
+            הוסף בן משפחה
           </button>
         </div>
       </div>
@@ -361,6 +767,7 @@ const PolicyConfigurator: React.FC<{
 };
 
 const AddCustomerModal: React.FC<{ onClose: () => void, onSubmit: (c: Customer) => void, profile: UserProfile }> = ({ onClose, onSubmit, profile }) => {
+
   const [form, setForm] = useState<Omit<Customer, 'createdAt'>>({
     id: '',
     firstName: '',
@@ -383,7 +790,7 @@ const AddCustomerModal: React.FC<{ onClose: () => void, onSubmit: (c: Customer) 
     return Array.from(types);
   }, [profile]);
 
-  const [activeTab, setActiveTab] = useState<InsuranceType>(activeInsuranceTypes[0] || 'private');
+  const [activeTab, setActiveTab] = useState<InsuranceType>(activeInsuranceTypes[0] || 'health');
   const [currentInputs, setCurrentInputs] = useState<any>({
     company: '',
     cost: 0,
@@ -402,7 +809,7 @@ const AddCustomerModal: React.FC<{ onClose: () => void, onSubmit: (c: Customer) 
     }
 
     let totalCost = currentInputs.cost;
-    if (activeTab === 'private' && currentInputs.details.subPolicies) {
+    if ((activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && currentInputs.details.subPolicies) {
       totalCost = Object.values(currentInputs.details.subPolicies as Record<string, number>).reduce((a, b) => a + (parseFloat(b as any) || 0), 0);
     }
 
@@ -413,6 +820,7 @@ const AddCustomerModal: React.FC<{ onClose: () => void, onSubmit: (c: Customer) 
       isAgentAppointmentOnly: currentInputs.isAgentAppointment,
       monthlyCost: totalCost,
       premiumSchedule: currentInputs.premiumSchedule,
+      excelColumns: currentInputs.excelColumns,
       details: { ...currentInputs.details },
       issueDate: new Date().toLocaleDateString('he-IL'),
       status: 'active'
@@ -424,76 +832,125 @@ const AddCustomerModal: React.FC<{ onClose: () => void, onSubmit: (c: Customer) 
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm animate-fadeIn" dir="rtl">
-      <div className="bg-white w-full max-w-4xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-slideUp">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-          <h2 className="text-2xl font-bold text-slate-900">הקמת לקוח חדש</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-standard text-slate-400"><X /></button>
+      <div className="bg-slate-50 w-full max-w-7xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-slideUp">
+        {/* Modal Header */}
+        <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-white shrink-0">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-3">
+            <span className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+              <Plus className="w-5 h-5 text-white" />
+            </span>
+            הקמת לקוח חדש
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-standard text-slate-400">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-white">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="space-y-6">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pb-2 border-b border-slate-50">פרטי לקוח</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block mr-1 uppercase">שם פרטי</label>
-                    <input type="text" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} className="w-full p-2 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white text-xs" placeholder="ישראל" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block mr-1 uppercase">שם משפחה</label>
-                    <input type="text" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} className="w-full p-2 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white text-xs" placeholder="ישראלי" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block mr-1 uppercase">תעודת זהות</label>
-                    <input type="text" value={form.id} onChange={e => setForm({ ...form, id: e.target.value })} className="w-full p-2 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white text-xs" placeholder="000000000" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 mb-1 block mr-1 uppercase">תאריך לידה</label>
-                    <input type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} className="w-full p-2 border border-slate-200 rounded-lg outline-none text-slate-900 font-medium bg-white text-xs" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">פוליסות שנוספו ({form.policies.length})</h4>
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                  {form.policies.map((p, idx) => (
-                    <div key={p.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex justify-between items-center group">
-                      <div className="text-right">
-                        <div className="font-bold text-xs text-slate-900">{p.company} • {INSURANCE_TYPE_LABELS[p.type]}</div>
-                        <div className="text-[10px] text-slate-500">₪{p.monthlyCost.toLocaleString()}</div>
-                      </div>
-                      <button onClick={() => setForm({ ...form, policies: form.policies.filter((_, i) => i !== idx) })} className="text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* Top Bar - Personal Details */}
+        <div className="px-10 py-6 bg-white border-b border-slate-200 shrink-0">
+          <div className="grid grid-cols-4 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם פרטי</label>
+              <input
+                type="text"
+                value={form.firstName}
+                onChange={e => setForm({ ...form, firstName: e.target.value })}
+                className="w-full p-3 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold bg-slate-50 focus:bg-white focus:border-sky-500 transition-all text-sm"
+                placeholder="ישראל"
+              />
             </div>
-
-            <div className="lg:col-span-2 space-y-6">
-              <PolicyConfigurator
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                profile={profile}
-                currentInputs={currentInputs}
-                setCurrentInputs={setCurrentInputs}
-                onAddPolicy={handleAddPolicyToForm}
-                buttonLabel="הוסף פוליסה זו ללקוח"
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">שם משפחה</label>
+              <input
+                type="text"
+                value={form.lastName}
+                onChange={e => setForm({ ...form, lastName: e.target.value })}
+                className="w-full p-3 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold bg-slate-50 focus:bg-white focus:border-sky-500 transition-all text-sm"
+                placeholder="ישראלי"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">תעודת זהות</label>
+              <input
+                type="text"
+                value={form.id}
+                onChange={e => setForm({ ...form, id: e.target.value })}
+                className="w-full p-3 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold bg-slate-50 focus:bg-white focus:border-sky-500 transition-all text-sm"
+                placeholder="000000000"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mr-1">תאריך הנפקה</label>
+              <input
+                type="date"
+                value={form.dateOfBirth}
+                onChange={e => setForm({ ...form, dateOfBirth: e.target.value })}
+                className="w-full p-3 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold bg-slate-50 focus:bg-white focus:border-sky-500 transition-all text-sm"
               />
             </div>
           </div>
         </div>
 
-        <div className="p-5 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-8 py-3 font-bold text-slate-400 hover:text-slate-600 transition-colors">ביטול</button>
-          <button
-            disabled={!form.id || !form.firstName || form.policies.length === 0}
-            onClick={() => onSubmit({ ...form, createdAt: new Date().toISOString() })}
-            className="px-12 py-3 bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 disabled:opacity-30 active:scale-[0.98] transition-all text-sm"
-          >
-            הוסף
-          </button>
+        <div className="flex-1 overflow-hidden flex">
+          {/* Main Content - Center/Left */}
+          <div className="flex-1 overflow-y-auto p-10 space-y-6">
+            <PolicyConfigurator
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              profile={profile}
+              currentInputs={currentInputs}
+              setCurrentInputs={setCurrentInputs}
+              onAddPolicy={handleAddPolicyToForm}
+              buttonLabel="הוסף פוליסה זו ללקוח"
+              layout="t-shape"
+            />
+          </div>
+
+          {/* Right Sidebar - Policies List */}
+          <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
+            <div className="p-4 border-b border-slate-100">
+              <h3 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">פוליסות שנוספו ({form.policies.length})</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {form.policies.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-40 space-y-3">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center">
+                    <ShieldCheck className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-[10px] font-bold leading-relaxed text-slate-500">טרם נוספו פוליסות<br />אנא בחר חברה וכיסוי משמאל</p>
+                </div>
+              ) : (
+                form.policies.map((p, idx) => (
+                  <div key={p.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex justify-between items-center group animate-fadeIn">
+                    <div className="text-right">
+                      <div className="font-bold text-[11px] text-slate-900 leading-tight">{p.company}</div>
+                      <div className="text-[10px] text-sky-600 font-bold">{INSURANCE_TYPE_LABELS[p.type]}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5 font-medium">₪{p.monthlyCost.toLocaleString()}</div>
+                    </div>
+                    <button
+                      onClick={() => setForm({ ...form, policies: form.policies.filter((_, i) => i !== idx) })}
+                      className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-5 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-[10px] font-bold text-slate-500">סה״כ פרמיה:</span>
+                <span className="text-base font-black text-slate-900">₪{form.policies.reduce((sum, p) => sum + p.monthlyCost, 0).toLocaleString()}</span>
+              </div>
+              <button
+                disabled={!form.id || !form.firstName || form.policies.length === 0}
+                onClick={() => onSubmit({ ...form, createdAt: new Date().toISOString() })}
+                className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg shadow-slate-900/20 hover:bg-sky-600 disabled:opacity-30 disabled:bg-slate-300 active:scale-[0.98] transition-all text-sm"
+              >
+                סיימתי והוספתי
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -505,6 +962,8 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
   const [editedCustomer, setEditedCustomer] = useState<Customer>({ ...customer });
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+  const [isAddFamilyMemberOpen, setIsAddFamilyMemberOpen] = useState(false);
+
 
   const activeInsuranceTypes = useMemo(() => {
     const types = new Set<InsuranceType>();
@@ -520,7 +979,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
     return Array.from(types);
   }, [profile]);
 
-  const [activeTab, setActiveTab] = useState<InsuranceType>(activeInsuranceTypes[0] || 'private');
+  const [activeTab, setActiveTab] = useState<InsuranceType>(activeInsuranceTypes[0] || 'health');
   const [currentInputs, setCurrentInputs] = useState<any>({
     company: '',
     cost: 0,
@@ -540,6 +999,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
       cost: policy.monthlyCost,
       isAgentAppointment: policy.isAgentAppointmentOnly,
       premiumSchedule: policy.premiumSchedule || [],
+      excelColumns: policy.excelColumns || [],
       details: { ...policy.details }
     });
     scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -560,7 +1020,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
     if (!currentInputs.company) return alert('נא לבחור חברת ביטוח');
 
     let totalCost = currentInputs.cost;
-    if (activeTab === 'private' && currentInputs.details.subPolicies) {
+    if ((activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && currentInputs.details.subPolicies) {
       totalCost = Object.values(currentInputs.details.subPolicies as Record<string, number>).reduce((a, b) => a + (parseFloat(b as any) || 0), 0);
     }
 
@@ -593,6 +1053,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
         isAgentAppointmentOnly: currentInputs.isAgentAppointment,
         monthlyCost: totalCost,
         premiumSchedule: currentInputs.premiumSchedule,
+        excelColumns: currentInputs.excelColumns,
         details: { ...currentInputs.details },
         issueDate: new Date().toLocaleDateString('he-IL'),
         status: 'active'
@@ -625,18 +1086,19 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
     let finalCustomer = { ...editedCustomer };
 
     // Logic for determining if there is "pending" unsaved work in the editor
-    const isPrivateDirty = activeTab === 'private' && Object.values(currentInputs.details?.subPolicies || {}).some((v: any) => parseFloat(v) > 0);
+    const isPrivateDirty = (activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && Object.values(currentInputs.details?.subPolicies || {}).some((v: any) => parseFloat(v) > 0);
     const isOtherDirty = currentInputs.cost > 0 ||
       (currentInputs.details?.accumulation || 0) > 0 ||
       (currentInputs.details?.deposit || 0) > 0 ||
       (currentInputs.details?.mobility || 0) > 0;
+
     const isElementaryDirty = activeTab === 'elementary' && (currentInputs.details?.elementaryCategory);
 
     const hasPendingChanges = isPrivateDirty || isOtherDirty || isElementaryDirty;
 
     if (hasPendingChanges) {
       let totalCost = currentInputs.cost;
-      if (activeTab === 'private' && currentInputs.details.subPolicies) {
+      if ((activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && currentInputs.details.subPolicies) {
         totalCost = Object.values(currentInputs.details.subPolicies as Record<string, number>).reduce((a, b) => a + (parseFloat(b as any) || 0), 0);
       }
 
@@ -652,6 +1114,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
             isAgentAppointmentOnly: currentInputs.isAgentAppointment,
             monthlyCost: totalCost,
             premiumSchedule: currentInputs.premiumSchedule,
+            excelColumns: currentInputs.excelColumns,
             details: { ...currentInputs.details }
           };
         }
@@ -666,6 +1129,7 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
             isAgentAppointmentOnly: currentInputs.isAgentAppointment,
             monthlyCost: totalCost,
             premiumSchedule: currentInputs.premiumSchedule,
+            excelColumns: currentInputs.excelColumns,
             details: { ...currentInputs.details },
             issueDate: new Date().toLocaleDateString('he-IL'),
             status: 'active'
@@ -688,29 +1152,33 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm animate-fadeIn" dir="rtl">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-slideUp flex flex-col max-h-[85vh]">
-        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
-          <div className="flex items-center gap-6 text-right">
-            <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-bold text-3xl">{editedCustomer.firstName[0]}</div>
+      <div className="bg-white w-full max-w-7xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-slideUp flex flex-col max-h-[92vh]">
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+          <div className="flex items-center gap-8 text-right">
+            <div className="w-20 h-20 bg-slate-900 text-white rounded-3xl flex items-center justify-center font-bold text-4xl shadow-lg shadow-slate-900/20">{editedCustomer.firstName[0]}</div>
             <div>
               {isEditing ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" value={editedCustomer.firstName} onChange={e => setEditedCustomer({ ...editedCustomer, firstName: e.target.value })} className="p-2 border border-slate-200 rounded-lg text-lg font-bold bg-white" placeholder="שם פרטי" />
-                  <input type="text" value={editedCustomer.lastName} onChange={e => setEditedCustomer({ ...editedCustomer, lastName: e.target.value })} className="p-2 border border-slate-200 rounded-lg text-lg font-bold bg-white" placeholder="שם משפחה" />
+                <div className="grid grid-cols-2 gap-4">
+                  <input type="text" value={editedCustomer.firstName} onChange={e => setEditedCustomer({ ...editedCustomer, firstName: e.target.value })} className="p-3 border border-slate-200 rounded-xl text-xl font-bold bg-white focus:border-sky-500 outline-none shadow-sm transition-all" placeholder="שם פרטי" />
+                  <input type="text" value={editedCustomer.lastName} onChange={e => setEditedCustomer({ ...editedCustomer, lastName: e.target.value })} className="p-3 border border-slate-200 rounded-xl text-xl font-bold bg-white focus:border-sky-500 outline-none shadow-sm transition-all" placeholder="שם משפחה" />
                 </div>
               ) : (
-                <h2 className="text-2xl font-bold text-slate-900">{editedCustomer.firstName} {editedCustomer.lastName}</h2>
+                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{editedCustomer.firstName} {editedCustomer.lastName}</h2>
               )}
-              <div className="text-slate-400 text-sm font-medium mt-1">
+              <div className="text-slate-400 text-base font-medium mt-2">
                 {isEditing ? (
-                  <div className="flex gap-4 items-center">
-                    <span className="text-[11px] font-bold">ת״ז:</span>
-                    <input type="text" value={editedCustomer.id} onChange={e => setEditedCustomer({ ...editedCustomer, id: e.target.value })} className="p-1.5 border border-slate-200 rounded text-xs bg-white w-32" />
-                    <span className="text-[11px] font-bold">תאריך לידה:</span>
-                    <input type="date" value={editedCustomer.dateOfBirth} onChange={e => setEditedCustomer({ ...editedCustomer, dateOfBirth: e.target.value })} className="p-1.5 border border-slate-200 rounded text-xs bg-white w-36" />
+                  <div className="flex gap-6 items-center">
+                    <span className="text-xs font-bold uppercase tracking-wider">ת״ז:</span>
+                    <input type="text" value={editedCustomer.id} onChange={e => setEditedCustomer({ ...editedCustomer, id: e.target.value })} className="p-2.5 border border-slate-200 rounded-lg text-sm bg-white w-40 focus:border-sky-500 outline-none" />
+                    <span className="text-xs font-bold uppercase tracking-wider">תאריך הנפקה:</span>
+                    <input type="date" value={editedCustomer.dateOfBirth} onChange={e => setEditedCustomer({ ...editedCustomer, dateOfBirth: e.target.value })} className="p-2.5 border border-slate-200 rounded-lg text-sm bg-white w-48 focus:border-sky-500 outline-none" />
                   </div>
                 ) : (
-                  `ת״ז: ${editedCustomer.id} • תאריך לידה: ${editedCustomer.dateOfBirth}`
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60">ת״ז:</span> <span className="text-slate-600 font-bold">{editedCustomer.id}</span>
+                    <span className="mx-2 opacity-30">•</span>
+                    <span className="opacity-60">תאריך הנפקה:</span> <span className="text-slate-600 font-bold">{editedCustomer.dateOfBirth}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -760,16 +1228,18 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
             </div>
           )}
 
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-slate-900 border-b border-slate-50 pb-2">פוליסות קיימות ({editedCustomer.policies.length})</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-8">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-4">
+              <h3 className="text-xl font-bold text-slate-900">פוליסות קיימות ({editedCustomer.policies.length})</h3>
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
               {editedCustomer.policies.map(p => (
-                <div key={p.id} className={`p-5 rounded-3xl border transition-all ${p.status === 'active' ? 'bg-white border-slate-100 shadow-sm' : 'bg-slate-50 border-slate-200 grayscale opacity-60'} ${editingPolicyId === p.id ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}>
-                  <div className="flex justify-between items-start mb-6">
+                <div key={p.id} className={`p-8 rounded-[2rem] border transition-all ${p.status === 'active' ? 'bg-white border-slate-100 shadow-md' : 'bg-slate-50 border-slate-200 grayscale opacity-60'} ${editingPolicyId === p.id ? 'ring-2 ring-sky-500 border-sky-500' : ''}`}>
+                  <div className="flex justify-between items-start mb-8">
                     <div className="text-right">
-                      <div className="text-[10px] font-bold text-sky-500 uppercase tracking-widest mb-1">{INSURANCE_TYPE_LABELS[p.type]}</div>
-                      <div className="text-xl font-bold text-slate-900">{p.company}</div>
-                      <div className="text-[11px] text-slate-400">הופק ב: {p.issueDate}</div>
+                      <div className="text-xs font-bold text-sky-500 uppercase tracking-widest mb-2">{INSURANCE_TYPE_LABELS[p.type]}</div>
+                      <div className="text-2xl font-bold text-slate-900">{p.company}</div>
+                      <div className="text-xs text-slate-400 mt-1">הופק ב: {p.issueDate}</div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase ${p.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-700'}`}>
@@ -800,19 +1270,28 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                       )}
                     </div>
 
-                    {!isEditing && p.type === 'private' && (
+                    {!isEditing && (p.type === 'health' || p.type === 'life' || p.type === 'critical_illness') && (
                       <div className="bg-slate-50/50 p-6 rounded-2xl space-y-4 border border-slate-100">
                         <h5 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">פירוט כיסויים:</h5>
                         <div className="grid grid-cols-1 gap-3">
-                          {Object.entries(p.details.subPolicies || {}).map(([sub, val]) => {
-                            if ((val as number) === 0) return null;
-                            return (
-                              <div key={sub} className="flex justify-between text-xs items-center group">
-                                <span className="text-slate-600 group-hover:text-slate-900 transition-colors">{sub}</span>
-                                <span className="font-bold tabular-nums">₪{(val as number).toLocaleString()}</span>
+                          {p.excelColumns && p.excelColumns.length > 0 ? (
+                            p.excelColumns.map(col => (
+                              <div key={col} className="flex justify-between text-xs items-center group">
+                                <span className="text-slate-600 group-hover:text-slate-900 transition-colors">{col}</span>
+                                <span className="text-[10px] text-slate-400 font-bold italic">מתוך טבלת פרמיה</span>
                               </div>
-                            );
-                          })}
+                            ))
+                          ) : (
+                            Object.entries(p.details.subPolicies || {}).map(([sub, val]) => {
+                              if ((val as number) === 0) return null;
+                              return (
+                                <div key={sub} className="flex justify-between text-xs items-center group">
+                                  <span className="text-slate-600 group-hover:text-slate-900 transition-colors">{sub}</span>
+                                  <span className="font-bold tabular-nums">₪{(val as number).toLocaleString()}</span>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                     )}
@@ -845,8 +1324,86 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                 </div>
               ))}
             </div>
+
+            {/* Family Members Section */}
+            <div className="bg-slate-50/30 p-10 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-8 mt-12">
+              <div className="flex justify-between items-center pb-6 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-3">
+                  <Heart className="w-6 h-6 text-rose-500" /> בני משפחה
+                </h3>
+                {isEditing && (
+                  <button
+                    onClick={() => setIsAddFamilyMemberOpen(true)}
+                    className="bg-sky-50 text-sky-600 px-4 py-1.5 rounded-xl font-bold text-[11px] hover:bg-sky-100 transition-all flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> הוסף בן משפחה
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {!editedCustomer.familyMembers || editedCustomer.familyMembers.length === 0 ? (
+                  <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                    <p className="text-xs text-slate-400 font-medium italic">אין בני משפחה רשומים</p>
+                  </div>
+                ) : (
+                  editedCustomer.familyMembers.map((member, mIdx) => (
+                    <div key={member.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 group relative">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                            {member.relationship === 'spouse' ? <Heart className="w-5 h-5 text-rose-400" /> : <Baby className="w-5 h-5 text-sky-400" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{member.firstName} {member.lastName}</div>
+                            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
+                              {member.relationship === 'spouse' ? 'בן/בת זוג' : 'ילד/ה'} • ₪{member.policies.reduce((sum, p) => sum + p.monthlyCost, 0).toLocaleString()} לחודש
+                            </div>
+                          </div>
+                        </div>
+                        {isEditing && (
+                          <button
+                            onClick={() => {
+                              const newFamily = editedCustomer.familyMembers?.filter((_, i) => i !== mIdx);
+                              setEditedCustomer({ ...editedCustomer, familyMembers: newFamily });
+                            }}
+                            className="text-rose-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 p-1.5 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Member Policies */}
+                      <div className="space-y-2">
+                        {member.policies.map(p => (
+                          <div key={p.id} className="bg-white/60 p-3 rounded-xl border border-slate-100/50 flex justify-between items-center">
+                            <div className="text-[11px] font-bold text-slate-700">{p.company} • {INSURANCE_TYPE_LABELS[p.type]}</div>
+                            <div className="text-[10px] tabular-nums font-bold text-slate-500">₪{p.monthlyCost.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Add Family Member Modal Integration */}
+        {isAddFamilyMemberOpen && (
+          <AddFamilyMemberModal
+            onClose={() => setIsAddFamilyMemberOpen(false)}
+            onSubmit={(member) => {
+              const currentFamily = editedCustomer.familyMembers || [];
+              setEditedCustomer({ ...editedCustomer, familyMembers: [...currentFamily, member] });
+              setIsAddFamilyMemberOpen(false);
+            }}
+            profile={profile}
+            primaryDOB={editedCustomer.dateOfBirth}
+          />
+        )}
 
         {isEditing && (
           <div className="p-8 border-t border-slate-100 bg-slate-50 flex justify-center">
@@ -891,23 +1448,6 @@ const CustomerJournal: React.FC<{
 
   const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-  const calculateAge = (dob: string, targetMonth: number, targetYear: number) => {
-    const birthDate = new Date(dob);
-    let age = targetYear - birthDate.getFullYear();
-    const m = targetMonth - birthDate.getMonth();
-    if (m < 0) age--;
-    return age;
-  };
-
-  const getEffectivePremium = (policy: Policy, customerDob: string, targetMonth: number, targetYear: number) => {
-    if (policy.type === 'private' && policy.premiumSchedule && policy.premiumSchedule.length > 0) {
-      const age = calculateAge(customerDob, targetMonth, targetYear);
-      const scheduleItem = policy.premiumSchedule.find(item => item.age === age);
-      return scheduleItem ? scheduleItem.premium : policy.monthlyCost;
-    }
-    return policy.monthlyCost;
-  };
-
   const calculateCommissions = (policy: Policy, premium: number) => {
     const agreement = profile.agreements[policy.company]?.[policy.type];
     if (!agreement) return { scope: 0, ongoing: 0 };
@@ -941,7 +1481,7 @@ const CustomerJournal: React.FC<{
     <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900" dir="rtl">
       <aside className="w-72 bg-slate-900 text-white flex flex-col hidden lg:flex">
         <div className="p-8 text-xl font-bold border-b border-slate-800 tracking-tight">
-          Insur<span className="text-sky-400">Agent</span> Pro
+          Followit <span className="text-sky-400">360</span>
         </div>
         <nav className="flex-1 p-6 space-y-2">
           <button onClick={() => onNavigate('dashboard')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
@@ -1023,7 +1563,21 @@ const CustomerJournal: React.FC<{
                         return (
                           <tr key={`${customer.id}-${policy.id}`} onClick={() => setViewingCustomer(customer)} className="hover:bg-sky-50/30 transition-colors cursor-pointer group">
                             <td className="p-3 font-bold text-slate-900 text-right">
-                              {customer.firstName} {customer.lastName}
+                              <div className="flex flex-col">
+                                <span className="flex items-center gap-2">
+                                  {customer.firstName} {customer.lastName}
+                                  {customer.familyMembers && customer.familyMembers.length > 0 && (
+                                    <span className="bg-sky-100 text-sky-600 p-1 rounded-lg" title="פוליסה משפחתית">
+                                      <Heart className="w-3 h-3 fill-current" />
+                                    </span>
+                                  )}
+                                </span>
+                                {customer.familyMembers && customer.familyMembers.length > 0 && (
+                                  <span className="text-[9px] text-slate-400 font-normal">
+                                    כולל {customer.familyMembers.length} בני משפחה
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3 text-slate-500 text-sm text-right">{customer.id}</td>
                             <td className="p-3 text-slate-700 font-medium text-right">{policy.company}</td>
@@ -1032,7 +1586,16 @@ const CustomerJournal: React.FC<{
                               {policy.details.elementaryCategory && ` (${policy.details.elementaryCategory})`}
                             </td>
                             <td className="p-3 text-slate-400 text-xs text-right">{policy.issueDate}</td>
-                            <td className="p-3 text-left font-bold tabular-nums">₪{premium.toLocaleString()}</td>
+                            <td className="p-3 text-left font-bold tabular-nums">
+                              <div className="flex flex-col items-end">
+                                <span>₪{premium.toLocaleString()}</span>
+                                {customer.familyMembers && customer.familyMembers.length > 0 && (
+                                  <span className="text-[9px] text-sky-600 font-bold mt-0.5">
+                                    סה״כ משפחתי: ₪{calculateCustomerTotalPremium(customer, selectedMonth, selectedYear).toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="p-3 text-left text-emerald-600 font-bold tabular-nums">₪{comms.ongoing.toLocaleString()}</td>
                             <td className="p-3 text-left text-sky-600 font-bold tabular-nums">
                               {policy.isAgentAppointmentOnly ? '—' : `₪${comms.scope.toLocaleString()}`}

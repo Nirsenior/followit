@@ -24,7 +24,12 @@ const App: React.FC = () => {
     isSetupComplete: false
   };
 
-  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
+  const [profile, setProfile] = useState<UserProfile>({
+    ...EMPTY_PROFILE,
+    selectedCompanies: ['הראל'],
+    agreements: { 'הראל': { health: { scope: '10', ongoing: '10' } } },
+    isSetupComplete: true
+  });
   const [customers, setCustomers] = useState<Customer[]>([]);
 
   const navigateTo = (screen: Screen) => setCurrentScreen(screen);
@@ -115,7 +120,7 @@ const App: React.FC = () => {
         <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-50">
           <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 max-w-sm w-full border border-slate-100 animate-slideUp">
             <div className="mb-4 text-center">
-              <div className="text-2xl font-bold text-slate-900 mb-2">InsurAgent Pro</div>
+              <div className="text-2xl font-bold text-slate-900 mb-2">Followit 360</div>
               <div className="text-slate-500 text-sm">התחברות למערכת הניהול המקצועית</div>
             </div>
 

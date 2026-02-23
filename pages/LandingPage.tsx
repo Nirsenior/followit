@@ -35,16 +35,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegister, onLogin }) => {
       <header className="fixed top-0 inset-x-0 bg-white/70 backdrop-blur-xl border-b border-slate-100 z-50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
           <div className="text-xl font-bold text-slate-900 tracking-tight">
-            Insur<span className="text-sky-500">Agent</span> Pro
+            Followit <span className="text-sky-500">360</span>
           </div>
           <div className="flex gap-4">
-            <button 
+            <button
               onClick={onLogin}
               className="px-5 py-2.5 text-slate-600 font-bold hover:text-sky-600 transition-colors"
             >
               כניסה
             </button>
-            <button 
+            <button
               onClick={onRegister}
               className="px-6 py-2.5 bg-sky-500 text-white rounded-xl font-bold hover:bg-sky-600 shadow-lg shadow-sky-500/20 transition-all active:scale-95"
             >
@@ -62,13 +62,44 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegister, onLogin }) => {
           <p className="text-xl text-slate-500 mb-12 leading-relaxed">
             {marketingText.subtitle}
           </p>
-          <button 
+          <button
             onClick={onRegister}
             className="bg-sky-500 text-white px-10 py-5 rounded-2xl font-bold text-lg hover:bg-sky-600 shadow-xl shadow-sky-500/25 transition-all hover:-translate-y-1 active:scale-95 flex items-center gap-3 mx-auto"
           >
             בואו נצא לדרך <ArrowLeft className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Promotional Video Section */}
+        <section className="mb-32 animate-fadeIn relative">
+          <div className="max-w-5xl mx-auto px-4">
+            <div className="relative group">
+              {/* Decorative background glow */}
+              <div className="absolute -inset-4 bg-gradient-to-r from-sky-500/20 to-emerald-500/20 rounded-[2.5rem] blur-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-700"></div>
+
+              <div className="relative bg-slate-900 rounded-[2rem] overflow-hidden shadow-2xl border border-slate-800 aspect-video flex items-center justify-center">
+                {/* Mock Video Content/Thumbnail */}
+                <img
+                  src="https://picsum.photos/seed/explainer/1200/675"
+                  className="absolute inset-0 w-full h-full object-cover opacity-60 grayscale-[0.3]"
+                  alt="Explainer Video Preview"
+                />
+
+                <div className="relative z-10 flex flex-col items-center gap-6">
+                  <div className="w-20 h-20 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/40 group-hover:scale-110 transition-transform cursor-pointer">
+                    <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-white mb-2">ראו את Followit 360 בפעולה</h3>
+                    <p className="text-slate-400 text-sm font-medium uppercase tracking-widest px-4 py-1.5 bg-white/10 rounded-full backdrop-blur-sm">סרטון הדגמה • דקה וחצי של יעילות</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <div className="grid md:grid-cols-3 gap-10 mb-32">
           {marketingText.features.map((feature, idx) => (
@@ -91,8 +122,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegister, onLogin }) => {
               </p>
               <div className="flex items-center gap-6">
                 <div className="flex -space-x-3 overflow-hidden flex-row-reverse">
-                  {[1,2,3].map(i => (
-                    <img key={i} className="inline-block h-10 w-10 rounded-full ring-2 ring-slate-900" src={`https://i.pravatar.cc/100?img=${i+10}`} alt=""/>
+                  {[1, 2, 3].map(i => (
+                    <img key={i} className="inline-block h-10 w-10 rounded-full ring-2 ring-slate-900" src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="" />
                   ))}
                 </div>
                 <div className="text-sm text-slate-400">
@@ -109,7 +140,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegister, onLogin }) => {
       </main>
 
       <footer className="py-12 text-center text-slate-400 text-sm border-t border-slate-100">
-        &copy; {new Date().getFullYear()} InsurAgent Pro. פותח באהבה לסוכני ישראל.
+        &copy; {new Date().getFullYear()} Followit 360. פותח באהבה לסוכני ישראל.
       </footer>
     </div>
   );
