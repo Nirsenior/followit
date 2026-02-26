@@ -16,15 +16,18 @@ import {
   UserProfile,
   PremiumScheduleItem,
   FamilyMember,
-  Relationship
+  Relationship,
+  FINANCIAL_TYPES
 } from '../types';
-import { POLICY_MASTER_LIST } from '../data/policy_master_list';
+import { POLICY_MASTER_LIST, getCoveragesForCompanyAndType, CoverageCategory } from '../data/policy_master_list';
+import { INVESTMENT_TRACKS } from '../data/investment_tracks';
+import { calcFinancialScope, calcFinancialOngoing, FinancialInputs, CommissionRates } from '../utils/commissionCalc';
 
 /* --- Constants & Helpers --- */
 const ELEMENTARY_OPTIONS = {
   'רכב': ['מקיף', 'חובה', 'צד ג\''],
-  'דירה': ['תכולה', 'צד ג\'', 'מבנה'],
-  'עסק': ['אחריות מקצועית', 'תכולה', 'צד ג\'', 'מבנה']
+  'מבנה': ['מבנה', 'תכולה', 'צד ג\'', 'חבות מעבידים'],
+  'עסק': ['תכולה', 'מבנה', 'צד ג\'', 'חבות מעבידים', 'חבות מוצר', 'עבודות חוץ', 'אחריות מקצועית']
 };
 
 /* --- Helpers --- */
@@ -247,28 +250,20 @@ const PolicyConfigurator: React.FC<{
   buttonLabel: string;
   layout?: 'default' | 't-shape';
 }> = ({ activeTab, setActiveTab, profile, currentInputs, setCurrentInputs, onAddPolicy, buttonLabel, layout = 'default' }) => {
-  const [elementaryCategory, setElementaryCategory] = useState<'רכב' | 'דירה' | 'עסק'>('רכב');
+  const [elementaryCategory, setElementaryCategory] = useState<keyof typeof ELEMENTARY_OPTIONS>('רכב');
   const [elementaryCoverage, setElementaryCoverage] = useState<string>('מקיף');
   const [elementaryAmount, setElementaryAmount] = useState<number>(0);
 
   const [isManualEntry, setIsManualEntry] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'elementary' && currentInputs.details?.elementaryCategory) {
-      setElementaryCategory(currentInputs.details.elementaryCategory);
-      setElementaryCoverage(currentInputs.details.elementaryCoverage || ELEMENTARY_OPTIONS[elementaryCategory][0]);
-      setElementaryAmount(currentInputs.cost || 0);
+    if (activeTab === 'elementary') {
+      // Logic for defaulting category if needed
     }
   }, [activeTab, currentInputs.id]);
 
   const handleAdd = () => {
-    if (activeTab === 'elementary') {
-      const details = { ...currentInputs.details, elementaryCategory, elementaryCoverage };
-      setCurrentInputs({ ...currentInputs, cost: elementaryAmount, details });
-      setTimeout(() => onAddPolicy(), 0);
-    } else {
-      onAddPolicy();
-    }
+    onAddPolicy();
   };
 
   const activeInsuranceTypes = useMemo(() => {
@@ -277,7 +272,7 @@ const PolicyConfigurator: React.FC<{
       const companyAgreements = profile.agreements[company] || {};
       (Object.keys(companyAgreements) as InsuranceType[]).forEach(type => {
         const agreement = companyAgreements[type];
-        if (agreement && (agreement.scope || agreement.ongoing || agreement.mobility)) {
+        if (agreement && (agreement.isActive || agreement.scope || agreement.ongoing || agreement.mobility)) {
           types.add(type);
         }
       });
@@ -288,7 +283,7 @@ const PolicyConfigurator: React.FC<{
   const filteredCompaniesUnderTab = useMemo(() => {
     return profile.selectedCompanies.filter(company => {
       const agreement = profile.agreements[company]?.[activeTab];
-      const isActivated = agreement && (agreement.scope || agreement.ongoing || agreement.mobility);
+      const isActivated = agreement && (agreement.isActive || agreement.scope || agreement.ongoing || agreement.mobility);
       if (!isActivated) return false;
       if (activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') {
         return INDIVIDUAL_POLICY_COMPANIES.includes(company);
@@ -306,10 +301,10 @@ const PolicyConfigurator: React.FC<{
               <div className="space-y-0.5">
                 <h4 className="text-[13px] font-bold text-slate-900 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-sky-500" />
-                  פירוט פוליסת פרט - {currentInputs.company || 'נא לבחור חברה'}
+                  פירוט {INSURANCE_TYPE_LABELS[activeTab]} - {currentInputs.company || 'נא לבחור חברה'}
                 </h4>
                 {currentInputs.company && (
-                  <span className="text-[10px] text-slate-400 font-medium">רשימת פוליסות מבוססת הסכם חברה</span>
+                  <span className="text-[10px] text-slate-400 font-medium">כיסויי {INSURANCE_TYPE_LABELS[activeTab]} מותאמים ל{currentInputs.company}</span>
                 )}
               </div>
               {currentInputs.company !== 'שלמה' && (
@@ -353,8 +348,8 @@ const PolicyConfigurator: React.FC<{
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-                {(currentInputs.company && POLICY_MASTER_LIST[currentInputs.company]
-                  ? POLICY_MASTER_LIST[currentInputs.company]
+                {(currentInputs.company
+                  ? getCoveragesForCompanyAndType(currentInputs.company, activeTab as CoverageCategory)
                   : []).map(sub => (
                     <div key={sub} className="flex items-center justify-between group">
                       <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors text-right flex-1 ml-4 leading-tight font-medium">{sub}</span>
@@ -391,70 +386,202 @@ const PolicyConfigurator: React.FC<{
         )}
 
         {activeTab === 'elementary' && (
-          <div className="space-y-4 animate-fadeIn">
-            <h4 className="text-[13px] font-bold text-slate-900">פירוט אלמנטרי</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">קטגוריה</label>
-                <select
-                  value={elementaryCategory}
-                  onChange={e => {
-                    const cat = e.target.value as any;
-                    setElementaryCategory(cat);
-                    setElementaryCoverage(ELEMENTARY_OPTIONS[cat][0]);
-                  }}
-                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
-                >
-                  <option value="רכב">ביטוח רכב</option>
-                  <option value="דירה">ביטוח דירה</option>
-                  <option value="עסק">ביטוח עסק</option>
-                </select>
+          <div className="space-y-6 animate-fadeIn">
+            <div className="space-y-4">
+              <label className="text-[10px] font-bold text-slate-400 block uppercase tracking-widest mr-1">בחר קטגוריה</label>
+              <div className="grid grid-cols-3 gap-3">
+                {(Object.keys(ELEMENTARY_OPTIONS) as Array<keyof typeof ELEMENTARY_OPTIONS>).map(cat => {
+                  const categoryTotal = Object.entries(currentInputs.details?.subPolicies || {})
+                    .filter(([key]) => key.startsWith(`${cat} - `))
+                    .reduce((sum, [_, val]) => sum + (parseFloat(val as any) || 0), 0);
+
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setElementaryCategory(cat)}
+                      className={`relative py-4 rounded-2xl font-black text-sm transition-all border-2 flex flex-col items-center gap-1 ${elementaryCategory === cat ? 'bg-slate-900 border-slate-900 text-white shadow-xl transform scale-105' : 'bg-white border-slate-100 text-slate-400 hover:border-sky-200 hover:bg-sky-50/30'}`}
+                    >
+                      <span>{cat}</span>
+                      {categoryTotal > 0 && (
+                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${elementaryCategory === cat ? 'bg-sky-500 text-white' : 'bg-slate-100 text-slate-500 animate-pulse'}`}>
+                          ₪{categoryTotal}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">כיסוי</label>
-                <select
-                  value={elementaryCoverage}
-                  onChange={e => setElementaryCoverage(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
-                >
-                  {(ELEMENTARY_OPTIONS[elementaryCategory] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+            </div>
+
+            <div className="space-y-4 animate-slideDown">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-bold text-slate-400 block uppercase tracking-widest mr-1">פירוט כיסויים: {elementaryCategory}</label>
+                {activeTab === 'elementary' && (
+                  <span className="text-[10px] font-black text-sky-600 bg-sky-50 px-2 py-1 rounded-lg">ניתן למלא מספר סוגים במקביל</span>
+                )}
               </div>
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום חופשי (₪)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs font-bold shadow-sm focus:border-sky-500 outline-none transition-all"
-                  placeholder="0"
-                  value={elementaryAmount || ''}
-                  onChange={e => setElementaryAmount(parseFloat(e.target.value) || 0)}
-                />
+              <div className="grid grid-cols-1 gap-y-2.5 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                {ELEMENTARY_OPTIONS[elementaryCategory].map(opt => {
+                  const storageKey = `${elementaryCategory} - ${opt}`;
+                  return (
+                    <div key={opt} className="flex items-center justify-between group">
+                      <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors text-right flex-1 ml-4 leading-tight font-bold">{opt}</span>
+                      <div className="relative w-32 shrink-0">
+                        <input
+                          type="number"
+                          className="w-full p-2 pl-8 border border-slate-200 rounded-lg text-xs outline-none focus:border-sky-500 bg-white shadow-sm transition-all font-black"
+                          placeholder="0"
+                          value={currentInputs.details.subPolicies?.[storageKey] || ''}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setCurrentInputs({
+                              ...currentInputs,
+                              details: {
+                                ...currentInputs.details,
+                                subPolicies: { ...currentInputs.details.subPolicies, [storageKey]: val }
+                              }
+                            });
+                          }}
+                        />
+                        <span className="absolute left-2 top-2 text-[10px] text-slate-300 font-bold">₪</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 bg-slate-50 rounded-xl p-4 flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">סה"כ פרמיה חודשית (אלמנטרי)</span>
+                <span className="text-lg font-black text-slate-900 tabular-nums">
+                  ₪{Object.values(currentInputs.details?.subPolicies || {}).reduce((a: any, b: any) => a + (parseFloat(b) || 0), 0)}
+                </span>
+              </div>
+              <ShieldCheck className="w-8 h-8 text-emerald-500 opacity-20" />
             </div>
           </div>
         )}
 
-        {(activeTab === 'pension' || activeTab === 'financial') && (
-          <div className="space-y-4 animate-fadeIn">
-            <h4 className="text-[13px] font-bold text-slate-900 uppercase">הזנת סכומים: {INSURANCE_TYPE_LABELS[activeTab]}</h4>
-            <div className="grid grid-cols-3 gap-4">
+        {FINANCIAL_TYPES.includes(activeTab) && (
+          <div className="space-y-6 animate-fadeIn">
+            <h4 className="text-[13px] font-bold text-slate-900 uppercase flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-sky-500" />
+              הזנת נתונים: {INSURANCE_TYPE_LABELS[activeTab]}
+            </h4>
+
+            {/* Establishment Date */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום צבירה</label>
-                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.accumulation || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, accumulation: parseFloat(e.target.value) || 0 } })} />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום הפקדה</label>
-                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.deposit || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, deposit: parseFloat(e.target.value) || 0 } })} />
-              </div>
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום ניוד</label>
-                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.details.mobility || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, mobility: parseFloat(e.target.value) || 0 } })} />
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">תאריך הקמה</label>
+                <input
+                  type="date"
+                  className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs"
+                  value={currentInputs.details.establishmentDate || ''}
+                  onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, establishmentDate: e.target.value } })}
+                />
               </div>
             </div>
-            <div className="space-y-2 pt-2">
-              <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mr-1">פרמיה חודשית כללית לחישוב עמלה (אם קיימת):</div>
-              <input type="number" placeholder="פרמיה חודשית (₪)" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" value={currentInputs.cost || ''} onChange={e => setCurrentInputs({ ...currentInputs, cost: parseFloat(e.target.value) || 0 })} />
+
+            {/* Financial Inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום צבירה (₪)</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" placeholder="0" value={currentInputs.details.accumulation || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, accumulation: parseFloat(e.target.value) || 0 } })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">סכום ניוד (₪)</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" placeholder="0" value={currentInputs.details.mobility || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, mobility: parseFloat(e.target.value) || 0 } })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">הפקדה חודשית (₪)</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" placeholder="0" value={currentInputs.details.monthlyDeposit || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, monthlyDeposit: parseFloat(e.target.value) || 0 } })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 mb-1.5 block uppercase tracking-wider">הפקדה חד פעמית (₪)</label>
+                <input type="number" className="w-full p-2.5 border border-slate-200 rounded-lg bg-white shadow-sm focus:border-sky-500 outline-none transition-all font-bold text-xs" placeholder="0" value={currentInputs.details.lumpSumDeposit || ''} onChange={e => setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, lumpSumDeposit: parseFloat(e.target.value) || 0 } })} />
+              </div>
             </div>
+
+            {/* Investment Track Selector */}
+            {currentInputs.company && INVESTMENT_TRACKS[currentInputs.company] && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">מסלולי השקעה</label>
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${(currentInputs.details.investmentTracks || []).reduce((s: number, t: any) => s + (t.weight || 0), 0) === 100
+                    ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                    {(currentInputs.details.investmentTracks || []).reduce((s: number, t: any) => s + (t.weight || 0), 0)}% / 100%
+                  </span>
+                </div>
+                <div className="space-y-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                  {INVESTMENT_TRACKS[currentInputs.company].map((track: string) => {
+                    const existing = (currentInputs.details.investmentTracks || []).find((t: any) => t.trackName === track);
+                    return (
+                      <div key={track} className="flex items-center justify-between gap-4 group">
+                        <span className="text-xs text-slate-600 font-bold flex-1 text-right">{track}</span>
+                        <div className="relative w-24 shrink-0">
+                          <input
+                            type="number"
+                            min="0" max="100"
+                            className="w-full p-1.5 pl-7 border border-slate-200 rounded-lg text-xs outline-none focus:border-sky-500 bg-white shadow-sm transition-all font-black text-center"
+                            placeholder="0"
+                            value={existing?.weight || ''}
+                            onChange={(e) => {
+                              const weight = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                              const tracks = [...(currentInputs.details.investmentTracks || [])].filter((t: any) => t.trackName !== track);
+                              if (weight > 0) tracks.push({ trackName: track, weight });
+                              setCurrentInputs({ ...currentInputs, details: { ...currentInputs.details, investmentTracks: tracks } });
+                            }}
+                          />
+                          <span className="absolute left-1.5 top-1.5 text-[10px] text-slate-300 font-bold">%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Live Commission Preview */}
+            {currentInputs.company && (() => {
+              const agreement = profile.agreements[currentInputs.company]?.[activeTab];
+              if (!agreement) return null;
+              const finInputs: FinancialInputs = {
+                accumulation: currentInputs.details.accumulation || 0,
+                mobility: currentInputs.details.mobility || 0,
+                monthlyDeposit: currentInputs.details.monthlyDeposit || 0,
+                lumpSumDeposit: currentInputs.details.lumpSumDeposit || 0
+              };
+              const rates: CommissionRates = {
+                scope: parseFloat(agreement.scope || '0'),
+                ongoing: parseFloat(agreement.ongoing || '0'),
+                mobility: parseFloat(agreement.mobility || '0')
+              };
+              const scopeVal = calcFinancialScope(finInputs, rates);
+              const ongoingVal = calcFinancialOngoing(finInputs, rates);
+              const hasData = finInputs.accumulation > 0 || finInputs.mobility > 0 || finInputs.monthlyDeposit > 0 || finInputs.lumpSumDeposit > 0;
+
+              return hasData ? (
+                <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-xl animate-fadeIn">
+                  <div className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-3">תצוגת עמלות משוערת</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">עמלת היקף (חד פעמי)</div>
+                      <div className="text-2xl font-black tabular-nums mt-1">₪{scopeVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">עמלת נפרעים (חודשי)</div>
+                      <div className="text-2xl font-black tabular-nums mt-1 text-emerald-400">₪{ongoingVal.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-[9px] text-slate-500 font-medium">
+                    <Info className="w-3 h-3" />
+                    מחושב לפי הסכם עם {currentInputs.company} ({rates.scope}% היקף, {rates.ongoing}% נפרעים)
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
         )}
 
@@ -1090,15 +1217,17 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
     const isOtherDirty = currentInputs.cost > 0 ||
       (currentInputs.details?.accumulation || 0) > 0 ||
       (currentInputs.details?.deposit || 0) > 0 ||
-      (currentInputs.details?.mobility || 0) > 0;
+      (currentInputs.details?.mobility || 0) > 0 ||
+      (currentInputs.details?.monthlyDeposit || 0) > 0 ||
+      (currentInputs.details?.lumpSumDeposit || 0) > 0;
 
-    const isElementaryDirty = activeTab === 'elementary' && (currentInputs.details?.elementaryCategory);
+    const isElementaryDirty = activeTab === 'elementary' && Object.values(currentInputs.details?.subPolicies || {}).some((v: any) => parseFloat(v) > 0);
 
     const hasPendingChanges = isPrivateDirty || isOtherDirty || isElementaryDirty;
 
     if (hasPendingChanges) {
       let totalCost = currentInputs.cost;
-      if ((activeTab === 'health' || activeTab === 'life' || activeTab === 'critical_illness') && currentInputs.details.subPolicies) {
+      if (['health', 'life', 'critical_illness', 'elementary'].includes(activeTab) && currentInputs.details.subPolicies) {
         totalCost = Object.values(currentInputs.details.subPolicies as Record<string, number>).reduce((a, b) => a + (parseFloat(b as any) || 0), 0);
       }
 
@@ -1304,20 +1433,42 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                       </div>
                     )}
 
-                    {!isEditing && (p.type === 'pension' || p.type === 'financial') && (
-                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 block mb-1">צבירה (₪)</label>
-                          <div className="text-xs font-bold">₪{(p.details.accumulation || 0).toLocaleString()}</div>
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 block mb-1">הפקדה (₪)</label>
-                          <div className="text-xs font-bold">₪{(p.details.deposit || 0).toLocaleString()}</div>
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-400 block mb-1">ניוד (₪)</label>
-                          <div className="text-xs font-bold">₪{(p.details.mobility || 0).toLocaleString()}</div>
-                        </div>
+                    {!isEditing && FINANCIAL_TYPES.includes(p.type) && (
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {(p.details.accumulation || 0) > 0 && (
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-1">צבירה (₪)</label>
+                            <div className="text-xs font-bold">₪{(p.details.accumulation || 0).toLocaleString()}</div>
+                          </div>
+                        )}
+                        {(p.details.mobility || 0) > 0 && (
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-1">ניוד (₪)</label>
+                            <div className="text-xs font-bold">₪{(p.details.mobility || 0).toLocaleString()}</div>
+                          </div>
+                        )}
+                        {(p.details.monthlyDeposit || 0) > 0 && (
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-1">הפקדה חודשית (₪)</label>
+                            <div className="text-xs font-bold">₪{(p.details.monthlyDeposit || 0).toLocaleString()}</div>
+                          </div>
+                        )}
+                        {(p.details.lumpSumDeposit || 0) > 0 && (
+                          <div>
+                            <label className="text-[9px] font-bold text-slate-400 block mb-1">הפקדה חד פעמית (₪)</label>
+                            <div className="text-xs font-bold">₪{(p.details.lumpSumDeposit || 0).toLocaleString()}</div>
+                          </div>
+                        )}
+                        {p.details.investmentTracks && p.details.investmentTracks.length > 0 && (
+                          <div className="col-span-full">
+                            <label className="text-[9px] font-bold text-slate-400 block mb-1">מסלולי השקעה</label>
+                            <div className="flex flex-wrap gap-1">
+                              {p.details.investmentTracks.map((t: any) => (
+                                <span key={t.trackName} className="text-[9px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-bold">{t.trackName} ({t.weight}%)</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1478,29 +1629,7 @@ const CustomerJournal: React.FC<{
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden text-slate-900" dir="rtl">
-      <aside className="w-72 bg-slate-900 text-white flex flex-col hidden lg:flex">
-        <div className="p-8 text-xl font-bold border-b border-slate-800 tracking-tight">
-          Followit <span className="text-sky-400">360</span>
-        </div>
-        <nav className="flex-1 p-6 space-y-2">
-          <button onClick={() => onNavigate('dashboard')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
-            <LayoutDashboard className="w-5 h-5" /> דשבורד
-          </button>
-          <button className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-sky-500 text-white font-bold shadow-lg shadow-sky-500/20">
-            <Users className="w-5 h-5" /> יומן לקוחות
-          </button>
-          <button onClick={() => onNavigate('profile')} className="w-full flex items-center gap-3 p-3.5 rounded-xl hover:bg-white/5 transition-standard text-slate-400">
-            <Edit3 className="w-5 h-5" /> פרופיל
-          </button>
-        </nav>
-        <div className="p-6 border-t border-slate-800">
-          <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-400/5 transition-standard">
-            <LogOut className="w-5 h-5" /> התנתקות
-          </button>
-        </div>
-      </aside>
-
+    <>
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-slate-100 p-6 flex justify-between items-center z-20">
           <div className="flex items-center gap-4">
@@ -1617,32 +1746,36 @@ const CustomerJournal: React.FC<{
           </div>
         </div>
 
-        <footer className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-4 flex justify-center z-30 lg:mr-72">
+        <footer className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-md border-t border-slate-100 p-4 flex justify-center z-30 lg:mr-[240px]">
           <button onClick={handleExportReport} className="bg-sky-500 text-white px-12 py-3.5 rounded-xl font-bold shadow-xl shadow-sky-500/20 hover:bg-sky-600 transition-all flex items-center gap-3 active:scale-95">
             <Download className="w-5 h-5" /> הפק דוח חודשי (PDF)
           </button>
         </footer>
       </main>
 
-      {isAddModalOpen && (
-        <AddCustomerModal
-          onClose={() => setIsAddModalOpen(false)}
-          onSubmit={(newC) => { setCustomers(prev => [...prev, newC]); setIsAddModalOpen(false); }}
-          profile={profile}
-        />
-      )}
+      {
+        isAddModalOpen && (
+          <AddCustomerModal
+            onClose={() => setIsAddModalOpen(false)}
+            onSubmit={(newC) => { setCustomers(prev => [...prev, newC]); setIsAddModalOpen(false); }}
+            profile={profile}
+          />
+        )
+      }
 
-      {viewingCustomer && (
-        <ViewCustomerModal
-          customer={viewingCustomer}
-          onClose={() => setViewingCustomer(null)}
-          profile={profile}
-          onUpdate={(updated) => {
-            setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
-          }}
-        />
-      )}
-    </div>
+      {
+        viewingCustomer && (
+          <ViewCustomerModal
+            customer={viewingCustomer}
+            onClose={() => setViewingCustomer(null)}
+            profile={profile}
+            onUpdate={(updated) => {
+              setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+            }}
+          />
+        )
+      }
+    </>
   );
 };
 

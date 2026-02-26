@@ -1,10 +1,13 @@
 
-export type InsuranceType = 'health' | 'life' | 'critical_illness' | 'pension' | 'financial' | 'elementary' | 'abroad';
+export type InsuranceType = 'health' | 'life' | 'critical_illness' | 'pension' | 'gemel' | 'hishtalmut' | 'gemel_invest' | 'long_term_savings' | 'elementary' | 'abroad';
+
+export type FinancialSubType = 'קרן השתלמות' | 'קופת גמל' | 'קופת גמל להשקעה' | 'חיסכון ארוך טווח' | 'קרן פנסיה';
 
 export interface CommissionValues {
   scope?: string;
   ongoing?: string;
   mobility?: string;
+  isActive?: boolean;
 }
 
 export type CompanyAgreements = Partial<Record<InsuranceType, CommissionValues>>;
@@ -37,11 +40,16 @@ export const INSURANCE_TYPE_LABELS: Record<InsuranceType, string> = {
   health: 'בריאות',
   life: 'חיים',
   critical_illness: 'מחלות קשות',
-  pension: 'פנסיוני',
-  financial: 'פיננסי',
+  pension: 'פנסיה',
+  gemel: 'קופת גמל',
+  hishtalmut: 'קרן השתלמות',
+  gemel_invest: 'קופת גמל להשקעה',
+  long_term_savings: 'חיסכון ארוך טווח',
   elementary: 'אלמנטרי',
   abroad: 'חו״ל'
 };
+
+export const FINANCIAL_TYPES: InsuranceType[] = ['pension', 'gemel', 'hishtalmut', 'gemel_invest', 'long_term_savings'];
 
 export const PRIVATE_SUB_POLICIES = [
   'ניתוחים בחו״ל', 'השתלות בחו״ל', 'תרופות מחוץ לסל',
@@ -58,6 +66,11 @@ export interface PremiumScheduleItem {
   premium: number;
 }
 
+export interface InvestmentTrackAllocation {
+  trackName: string;
+  weight: number; // 0-100 percentage
+}
+
 export interface Policy {
   id: string;
   type: InsuranceType;
@@ -69,12 +82,18 @@ export interface Policy {
   details: {
     subPolicies?: Record<string, number>;
     accumulation?: number;
-    deposit?: number;
+    deposit?: number;        // Legacy — use for backward compat
     mobility?: number;
+    redemptions?: number;
     subType?: string;
+    monthlyDeposit?: number;
+    lumpSumDeposit?: number;
+    investmentTracks?: InvestmentTrackAllocation[];
+    establishmentDate?: string;
   };
   issueDate: string;
   status: 'active' | 'inactive';
+  fixedCommissionRate?: string; // Locked rate for "New Only" updates
 }
 
 export type Relationship = 'spouse' | 'child' | 'other';

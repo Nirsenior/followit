@@ -7,7 +7,8 @@ import {
   InsuranceType,
   UserProfile,
   Customer,
-  CompanyAgreements
+  CompanyAgreements,
+  FINANCIAL_TYPES
 } from '../types';
 
 interface RegistrationPageProps {
@@ -25,8 +26,11 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ initialProfile, onC
     life: { scope: '', ongoing: '' },
     critical_illness: { scope: '', ongoing: '' },
     pension: { scope: '', ongoing: '', mobility: '' },
-    financial: { scope: '', ongoing: '', mobility: '' },
-    elementary: { scope: '' },
+    gemel: { scope: '', ongoing: '', mobility: '' },
+    hishtalmut: { scope: '', ongoing: '', mobility: '' },
+    gemel_invest: { scope: '', ongoing: '', mobility: '' },
+    long_term_savings: { scope: '', ongoing: '', mobility: '' },
+    elementary: { isActive: false },
     abroad: { scope: '' }
   });
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
@@ -126,55 +130,76 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ initialProfile, onC
       </div>
 
       <div className="grid gap-4">
-        {(['health', 'life', 'critical_illness', 'pension', 'financial', 'elementary', 'abroad'] as InsuranceType[]).map(type => (
+        {(['health', 'life', 'critical_illness', 'pension', 'gemel', 'hishtalmut', 'gemel_invest', 'long_term_savings', 'elementary', 'abroad'] as InsuranceType[]).map(type => (
           <div key={type} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
             <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
               <span className="w-1.5 h-6 bg-sky-500 rounded-full"></span>
               {INSURANCE_TYPE_LABELS[type]}
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              <div className="flex flex-col">
-                <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">היקף (%)</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
-                  value={globalAgreements[type]?.scope || ''}
-                  onChange={(e) => setGlobalAgreements(prev => ({
-                    ...prev,
-                    [type]: { ...prev[type], scope: e.target.value }
-                  }))}
-                />
-              </div>
-              {type !== 'elementary' && type !== 'abroad' && (
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">נפרעים (%)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
-                    value={globalAgreements[type]?.ongoing || ''}
-                    onChange={(e) => setGlobalAgreements(prev => ({
-                      ...prev,
-                      [type]: { ...prev[type], ongoing: e.target.value }
-                    }))}
-                  />
+              {type === 'elementary' ? (
+                <div className="col-span-full">
+                  <label className="flex items-center gap-3 cursor-pointer group bg-white p-4 rounded-xl border-2 border-slate-100 hover:border-sky-500 transition-all w-fit">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5 accent-sky-500 rounded border-slate-200"
+                      checked={globalAgreements[type]?.isActive || false}
+                      onChange={(e) => setGlobalAgreements(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type], isActive: e.target.checked }
+                      }))}
+                    />
+                    <span className="font-bold text-slate-700">האם מוכר אלמנטרי? (כן/לא)</span>
+                  </label>
                 </div>
-              )}
-              {(type === 'pension' || type === 'financial') && (
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">ניוד (%)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
-                    value={globalAgreements[type]?.mobility || ''}
-                    onChange={(e) => setGlobalAgreements(prev => ({
-                      ...prev,
-                      [type]: { ...prev[type], mobility: e.target.value }
-                    }))}
-                  />
-                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col">
+                    <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">
+                      {FINANCIAL_TYPES.includes(type) ? 'היקף הפקדות (%)' : 'היקף (%)'}
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
+                      value={globalAgreements[type]?.scope || ''}
+                      onChange={(e) => setGlobalAgreements(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type], scope: e.target.value }
+                      }))}
+                    />
+                  </div>
+                  {type !== 'abroad' && (
+                    <div className="flex flex-col">
+                      <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">נפרעים (%)</label>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
+                        value={globalAgreements[type]?.ongoing || ''}
+                        onChange={(e) => setGlobalAgreements(prev => ({
+                          ...prev,
+                          [type]: { ...prev[type], ongoing: e.target.value }
+                        }))}
+                      />
+                    </div>
+                  )}
+                  {FINANCIAL_TYPES.includes(type) && (
+                    <div className="flex flex-col">
+                      <label className="text-[10px] font-bold text-slate-400 mb-1 mr-1 uppercase">היקף ניוד (%)</label>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-white font-bold"
+                        value={globalAgreements[type]?.mobility || ''}
+                        onChange={(e) => setGlobalAgreements(prev => ({
+                          ...prev,
+                          [type]: { ...prev[type], mobility: e.target.value }
+                        }))}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -234,7 +259,7 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ initialProfile, onC
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {(['health', 'life', 'critical_illness', 'pension', 'financial', 'elementary', 'abroad'] as InsuranceType[]).map(type => {
+              {(['health', 'life', 'critical_illness', 'pension', 'gemel', 'hishtalmut', 'gemel_invest', 'long_term_savings', 'elementary', 'abroad'] as InsuranceType[]).map(type => {
                 const isRestricted = editingCompany === 'שלמה' && (type === 'health' || type === 'life' || type === 'critical_illness');
                 return (
                   <div key={type} className={`p-5 rounded-2xl border transition-all space-y-4 ${isRestricted ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-sky-50/30 border-sky-100/50'}`}>
@@ -245,39 +270,57 @@ const RegistrationPage: React.FC<RegistrationPageProps> = ({ initialProfile, onC
                     </div>
                     {!isRestricted ? (
                       <div className="grid grid-cols-1 gap-4">
-                        <div className="flex flex-col">
-                          <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת היקף (%)</label>
-                          <input
-                            type="number"
-                            placeholder="0"
-                            className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
-                            value={profile.agreements[editingCompany]?.[type]?.scope || ''}
-                            onChange={(e) => handleAgreementChange(editingCompany, type, 'scope', e.target.value)}
-                          />
-                        </div>
-                        {type !== 'elementary' && type !== 'abroad' && (
-                          <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת נפרעים (%)</label>
+                        {type === 'elementary' ? (
+                          <label className="flex items-center gap-3 cursor-pointer group bg-white p-3 rounded-xl border border-slate-200 hover:border-sky-500 transition-all">
                             <input
-                              type="number"
-                              placeholder="0"
-                              className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
-                              value={profile.agreements[editingCompany]?.[type]?.ongoing || ''}
-                              onChange={(e) => handleAgreementChange(editingCompany, type, 'ongoing', e.target.value)}
+                              type="checkbox"
+                              className="w-5 h-5 accent-sky-500 rounded border-slate-200"
+                              checked={profile.agreements[editingCompany]?.[type]?.isActive || false}
+                              onChange={(e) => {
+                                handleAgreementChange(editingCompany, type, 'isActive' as any, e.target.checked as any);
+                              }}
                             />
-                          </div>
-                        )}
-                        {(type === 'pension' || type === 'financial') && (
-                          <div className="flex flex-col">
-                            <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת ניוד (%)</label>
-                            <input
-                              type="number"
-                              placeholder="0"
-                              className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
-                              value={profile.agreements[editingCompany]?.[type]?.mobility || ''}
-                              onChange={(e) => handleAgreementChange(editingCompany, type, 'mobility', e.target.value)}
-                            />
-                          </div>
+                            <span className="font-bold text-slate-700 text-sm">האם מוכר אלמנטרי? (כן/לא)</span>
+                          </label>
+                        ) : (
+                          <>
+                            <div className="flex flex-col">
+                              <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">
+                                {FINANCIAL_TYPES.includes(type) ? 'עמלת היקף הפקדות (%)' : 'עמלת היקף (%)'}
+                              </label>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                value={profile.agreements[editingCompany]?.[type]?.scope || ''}
+                                onChange={(e) => handleAgreementChange(editingCompany, type, 'scope', e.target.value)}
+                              />
+                            </div>
+                            {type !== 'abroad' && (
+                              <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת נפרעים (%)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                  value={profile.agreements[editingCompany]?.[type]?.ongoing || ''}
+                                  onChange={(e) => handleAgreementChange(editingCompany, type, 'ongoing', e.target.value)}
+                                />
+                              </div>
+                            )}
+                            {FINANCIAL_TYPES.includes(type) && (
+                              <div className="flex flex-col">
+                                <label className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider mr-1">עמלת היקף ניוד (%)</label>
+                                <input
+                                  type="number"
+                                  placeholder="0"
+                                  className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
+                                  value={profile.agreements[editingCompany]?.[type]?.mobility || ''}
+                                  onChange={(e) => handleAgreementChange(editingCompany, type, 'mobility', e.target.value)}
+                                />
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     ) : (
