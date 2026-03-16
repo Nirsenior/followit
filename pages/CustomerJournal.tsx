@@ -82,6 +82,36 @@ const calculateCustomerTotalPremium = (customer: Customer, targetMonth: number, 
   return total;
 };
 
+const calculateAccumulationForCustomer = (customer: Customer, targetMonth: number, targetYear: number) => {
+  let total = 0;
+  customer.policies.forEach(p => {
+    if (FINANCIAL_TYPES.includes(p.type)) {
+      const initial = (p.details.accumulation || 0) +
+        (p.details.mobility || 0) +
+        (p.details.lumpSumDeposit || 0);
+      const monthly = (p.details.monthlyDeposit || 0);
+
+      if (monthly === 0 || !p.issueDate) {
+        total += initial;
+      } else {
+        let issue: Date;
+        if (p.issueDate.includes('/')) {
+          const parts = p.issueDate.split('/');
+          issue = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else {
+          issue = new Date(p.issueDate);
+        }
+
+        const target = new Date(targetYear, targetMonth, 1);
+        let diff = (target.getFullYear() - issue.getFullYear()) * 12 + (target.getMonth() - issue.getMonth());
+        if (diff < 0) diff = 0;
+        total += initial + (monthly * diff);
+      }
+    }
+  });
+  return total;
+};
+
 
 
 /* --- Sub-Components --- */
@@ -1002,7 +1032,7 @@ const PolicyConfigurator: React.FC<{
 
             <div className="space-y-1.5">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mr-1">
-                תאריך הנפקה
+                תאריך הפקה
               </label>
               <input
                 type="date"
@@ -1233,7 +1263,7 @@ const AddFamilyMemberModal: React.FC<{
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">תאריך הנפקה</label>
+                    <label className="text-xs font-bold text-slate-500 mb-2 block mr-1 uppercase">תאריך הפקה</label>
                     <input type="date" value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl bg-white text-sm font-bold" />
                   </div>
                   {isChild && age < 18 && (
@@ -1509,6 +1539,15 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
   const [isAddFamilyMemberOpen, setIsAddFamilyMemberOpen] = useState(false);
+  const [expandedPolicies, setExpandedPolicies] = useState<string[]>([]);
+
+  const togglePolicyExpanded = (policyId: string) => {
+    setExpandedPolicies(prev =>
+      prev.includes(policyId)
+        ? prev.filter(id => id !== policyId)
+        : [...prev, policyId]
+    );
+  };
 
 
   const activeInsuranceTypes = useMemo(() => {
@@ -1733,14 +1772,14 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                   <div className="flex gap-4 items-center mt-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider">ת״ז:</span>
                     <input type="text" value={editedCustomer.id} onChange={e => setEditedCustomer({ ...editedCustomer, id: e.target.value })} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-32 focus:border-sky-500 outline-none" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">תאריך הנפקה:</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">תאריך הפקה:</span>
                     <input type="date" value={editedCustomer.dateOfBirth} onChange={e => setEditedCustomer({ ...editedCustomer, dateOfBirth: e.target.value })} className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white w-40 focus:border-sky-500 outline-none" />
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="opacity-60">ת״ז:</span> <span className="text-slate-600 font-bold">{editedCustomer.id}</span>
                     <span className="mx-2 opacity-30">•</span>
-                    <span className="opacity-60">תאריך הנפקה:</span> <span className="text-slate-600 font-bold">{editedCustomer.dateOfBirth}</span>
+                    <span className="opacity-60">תאריך הפקה:</span> <span className="text-slate-600 font-bold">{editedCustomer.dateOfBirth}</span>
                   </div>
                 )}
               </div>
@@ -1821,23 +1860,36 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                   </div>
 
                   <div className="space-y-4">
-                    <div className="flex justify-between items-end">
-                      <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                        ₪{p.monthlyCost.toLocaleString()}
-                        <div className="text-[10px] text-slate-400 font-normal mt-1 uppercase tracking-wider">עלות חודשית סה״כ</div>
+                    <div className="flex justify-between items-center bg-slate-50/50 p-3 rounded-lg border border-slate-100/50">
+                      <div className="flex items-center gap-4">
+                        <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                          ₪{p.monthlyCost.toLocaleString()}
+                          <div className="text-[10px] text-slate-400 font-normal mt-1 uppercase tracking-wider">עלות חודשית</div>
+                        </div>
                       </div>
-                      {isEditing && (
-                        <button
-                          onClick={() => handleTogglePolicyStatus(p.id)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${p.status === 'active' ? 'text-rose-500 hover:bg-rose-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
-                        >
-                          {p.status === 'active' ? 'ביטול פוליסה' : 'שחזור פוליסה'}
-                        </button>
-                      )}
+
+                      <div className="flex items-center gap-3">
+                        {isEditing ? (
+                          <button
+                            onClick={() => handleTogglePolicyStatus(p.id)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${p.status === 'active' ? 'text-rose-500 hover:bg-rose-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                          >
+                            {p.status === 'active' ? 'ביטול פוליסה' : 'שחזור פוליסה'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => togglePolicyExpanded(p.id)}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-500 hover:text-sky-600 hover:border-sky-200 transition-all shadow-sm"
+                          >
+                            {expandedPolicies.includes(p.id) ? 'צמצם פירוט' : 'הצג פירוט כיסויים'}
+                            {expandedPolicies.includes(p.id) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    {!isEditing && (p.type === 'health' || p.type === 'life' || p.type === 'critical_illness') && (
-                      <div className="bg-slate-50/50 p-4 rounded-xl space-y-3 border border-slate-100">
+                    {!isEditing && (p.type === 'health' || p.type === 'life' || p.type === 'critical_illness') && expandedPolicies.includes(p.id) && (
+                      <div className="bg-slate-50/50 p-4 rounded-xl space-y-3 border border-slate-100 animate-fadeIn">
                         <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1.5">פירוט כיסויים:</h5>
                         <div className="grid grid-cols-1 gap-3">
                           {p.excelColumns && p.excelColumns.length > 0 ? (
@@ -1862,16 +1914,16 @@ const ViewCustomerModal: React.FC<{ customer: Customer, onClose: () => void, pro
                       </div>
                     )}
 
-                    {!isEditing && p.type === 'elementary' && (
-                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-3">
+                    {!isEditing && p.type === 'elementary' && expandedPolicies.includes(p.id) && (
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-3 animate-fadeIn">
                         <div className="text-xs text-slate-500 italic">
                           {p.details.elementaryCategory || 'כללי'} • {p.details.elementaryCoverage || 'כיסוי'}
                         </div>
                       </div>
                     )}
 
-                    {!isEditing && FINANCIAL_TYPES.includes(p.type) && (
-                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {!isEditing && FINANCIAL_TYPES.includes(p.type) && expandedPolicies.includes(p.id) && (
+                      <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-3 animate-fadeIn">
                         {(p.details.accumulation || 0) > 0 && (
                           <div>
                             <label className="text-[9px] font-bold text-slate-400 block mb-1">צבירה (₪)</label>
@@ -2028,6 +2080,8 @@ const CustomerJournal: React.FC<{
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [productFilter, setProductFilter] = useState<string>('all');
 
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -2092,17 +2146,32 @@ const CustomerJournal: React.FC<{
     return customers
       .filter(c => {
         const fullSearchString = `${c.firstName} ${c.lastName} ${c.id}`.toLowerCase();
-        return fullSearchString.includes(searchQuery.toLowerCase());
+        const matchesSearch = fullSearchString.includes(searchQuery.toLowerCase());
+
+        const matchesCompany = companyFilter === 'all' || c.policies.some(p => p.company === companyFilter);
+        const matchesProduct = productFilter === 'all' || c.policies.some(p => p.type === productFilter);
+
+        return matchesSearch && matchesCompany && matchesProduct;
       })
       .sort((a, b) => {
         // Sort by the latest issueDate among policies, descending
-        const getLatestDate = (cust: Customer) => {
-          if (!cust.policies || cust.policies.length === 0) return '0000-00-00';
-          return cust.policies.reduce((latest, p) => (p.issueDate > latest ? p.issueDate : latest), '0000-00-00');
+        const getLatestTimestamp = (cust: Customer) => {
+          if (!cust.policies || cust.policies.length === 0) return 0;
+          return cust.policies.reduce((latest, p) => {
+            if (!p.issueDate) return latest;
+            let currentTs = 0;
+            if (p.issueDate.includes('/')) {
+              const [d, m, y] = p.issueDate.split('/').map(Number);
+              currentTs = new Date(y, m - 1, d).getTime();
+            } else {
+              currentTs = new Date(p.issueDate).getTime();
+            }
+            return currentTs > latest ? currentTs : latest;
+          }, 0);
         };
-        return getLatestDate(b).localeCompare(getLatestDate(a));
+        return getLatestTimestamp(b) - getLatestTimestamp(a);
       });
-  }, [customers, searchQuery]);
+  }, [customers, searchQuery, companyFilter, productFilter]);
 
   const handleExportReport = () => {
     alert(`מפיק דוח עבור חודש ${months[selectedMonth]} ${selectedYear}... (PDF מדמה הורדה)`);
@@ -2127,13 +2196,42 @@ const CustomerJournal: React.FC<{
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Portfolio Filters */}
+            <div className="hidden md:flex items-center gap-3">
+              <div className="relative group">
+                <select
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  className="appearance-none bg-slate-50 border border-slate-200 rounded-xl py-2.5 pr-10 pl-4 focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 outline-none text-xs font-bold text-slate-600 transition-all cursor-pointer min-w-[140px]"
+                >
+                  <option value="all">כל החברות</option>
+                  {profile.selectedCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <ShieldCheck className="absolute right-3.5 top-2.5 w-4 h-4 text-slate-400 pointer-events-none group-focus-within:text-sky-500 transition-colors" />
+              </div>
+
+              <div className="relative group">
+                <select
+                  value={productFilter}
+                  onChange={(e) => setProductFilter(e.target.value)}
+                  className="appearance-none bg-slate-50 border border-slate-200 rounded-xl py-2.5 pr-10 pl-4 focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 outline-none text-xs font-bold text-slate-600 transition-all cursor-pointer min-w-[140px]"
+                >
+                  <option value="all">כל המוצרים</option>
+                  {Object.entries(INSURANCE_TYPE_LABELS).map(([type, label]) => (
+                    <option key={type} value={type}>{label}</option>
+                  ))}
+                </select>
+                <TableIcon className="absolute right-3.5 top-2.5 w-4 h-4 text-slate-400 pointer-events-none group-focus-within:text-sky-500 transition-colors" />
+              </div>
+            </div>
+
             <div className="relative">
               <input
                 type="text"
                 placeholder="חיפוש לפי שם או ת״ז..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white border border-slate-200 rounded-xl py-2.5 pr-11 pl-4 focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 outline-none text-sm w-72 transition-all text-right"
+                className="bg-white border border-slate-200 rounded-xl py-2.5 pr-11 pl-4 focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 outline-none text-xs w-72 transition-all text-right font-medium"
               />
               <Search className="absolute right-4 top-3 w-4 h-4 text-slate-400" />
             </div>
@@ -2149,8 +2247,9 @@ const CustomerJournal: React.FC<{
                     <th className="p-3 text-right">שם לקוח / ת״ז</th>
                     <th className="p-3 text-right">חברות ביטוח</th>
                     <th className="p-3 text-right">תיק ביטוחי</th>
-                    <th className="p-3 text-right">תאריך הנפקה (עדכני)</th>
-                    <th className="p-3 text-left">סה״כ לתשלום</th>
+                    <th className="p-3 text-right">תאריך הפקה (עדכני)</th>
+                    <th className="p-3 text-left">סכום צבירה</th>
+                    <th className="p-3 text-left">תשלום חודשי</th>
                     <th className="p-3 text-left">נפרעים (סה״כ)</th>
                     <th className="p-3 text-left">היקף (סה״כ)</th>
                     <th className="p-3 text-center">פוליסות</th>
@@ -2179,6 +2278,7 @@ const CustomerJournal: React.FC<{
                       const totalPremium = calculateCustomerTotalPremium(customer, selectedMonth, selectedYear);
 
                       const latestDate = customerPolicies.reduce((latest, p) => (p.issueDate > latest ? p.issueDate : latest), '—');
+                      const totalAccumulation = calculateAccumulationForCustomer(customer, selectedMonth, selectedYear);
                       const activeCount = customerPolicies.filter(p => p.status === 'active').length;
 
                       return (
@@ -2207,6 +2307,9 @@ const CustomerJournal: React.FC<{
                             </div>
                           </td>
                           <td className="p-3 text-slate-400 text-xs text-right font-bold">{latestDate}</td>
+                          <td className="p-3 text-left font-black tabular-nums text-emerald-600">
+                            ₪{totalAccumulation.toLocaleString()}
+                          </td>
                           <td className="p-3 text-left font-black tabular-nums text-slate-900">
                             ₪{totalPremium.toLocaleString()}
                           </td>
