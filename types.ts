@@ -90,6 +90,8 @@ export interface Policy {
     lumpSumDeposit?: number;
     investmentTracks?: InvestmentTrackAllocation[];
     establishmentDate?: string;
+    manualElementaryScope?: number;
+    manualElementaryOngoing?: number;
   };
   issueDate: string;
   status: 'active' | 'inactive';

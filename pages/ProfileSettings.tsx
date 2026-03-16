@@ -121,6 +121,29 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
     setPendingChange(null);
   };
 
+  const handleCancelPending = () => {
+    if (!pendingChange) return;
+    const { company, type, oldValue } = pendingChange;
+    if (company === 'GLOBAL') {
+      setGlobalAgreements(prev => ({
+        ...prev,
+        [type]: { ...prev[type], ongoing: oldValue }
+      }));
+    } else {
+      setLocalProfile(prev => ({
+        ...prev,
+        agreements: {
+          ...prev.agreements,
+          [company]: {
+            ...prev.agreements[company],
+            [type]: { ...prev.agreements[company]?.[type], ongoing: oldValue }
+          }
+        }
+      }));
+    }
+    setPendingChange(null);
+  };
+
   const removeCompany = (company: string) => {
     const next = localProfile.selectedCompanies.filter(c => c !== company);
     setLocalProfile({ ...localProfile, selectedCompanies: next });
@@ -292,13 +315,26 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                                     placeholder="0"
                                     className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 bg-slate-50/50 font-bold"
                                     value={globalAgreements[type]?.ongoing || ''}
+                                    onFocus={(e) => { e.currentTarget.dataset.initial = e.target.value; }}
+                                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                     onChange={(e) => {
-                                      setPendingChange({
-                                        company: 'GLOBAL',
-                                        type,
-                                        oldValue: globalAgreements[type]?.ongoing || '0',
-                                        newValue: e.target.value
-                                      });
+                                      const val = e.target.value;
+                                      setGlobalAgreements(prev => ({
+                                        ...prev,
+                                        [type]: { ...prev[type], ongoing: val }
+                                      }));
+                                    }}
+                                    onBlur={(e) => {
+                                      const newValue = e.target.value;
+                                      const oldValue = e.currentTarget.dataset.initial || '0';
+                                      if (newValue !== oldValue) {
+                                        setPendingChange({
+                                          company: 'GLOBAL',
+                                          type,
+                                          oldValue,
+                                          newValue
+                                        });
+                                      }
                                     }}
                                   />
                                 </div>
@@ -452,13 +488,26 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
                                       placeholder="0"
                                       className="p-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-sky-500/10 focus:border-sky-500 bg-white font-bold text-slate-900 transition-all"
                                       value={localProfile.agreements[editingCompany]?.[type]?.ongoing || ''}
+                                      onFocus={(e) => { e.currentTarget.dataset.initial = e.target.value; }}
+                                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                       onChange={(e) => {
-                                        setPendingChange({
-                                          company: editingCompany,
-                                          type,
-                                          oldValue: localProfile.agreements[editingCompany]?.[type]?.ongoing || '0',
-                                          newValue: e.target.value
-                                        });
+                                        const val = e.target.value;
+                                        const next = { ...localProfile.agreements };
+                                        if (!next[editingCompany]) next[editingCompany] = {};
+                                        next[editingCompany][type] = { ...(next[editingCompany][type] || {}), ongoing: val };
+                                        setLocalProfile({ ...localProfile, agreements: next });
+                                      }}
+                                      onBlur={(e) => {
+                                        const newValue = e.target.value;
+                                        const oldValue = e.currentTarget.dataset.initial || '0';
+                                        if (newValue !== oldValue) {
+                                          setPendingChange({
+                                            company: editingCompany,
+                                            type,
+                                            oldValue,
+                                            newValue
+                                          });
+                                        }
                                       }}
                                     />
                                   </div>
@@ -579,7 +628,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
       {/* Change Effectivity Modal */}
       {pendingChange && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 grayscale-0">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fadeIn" onClick={() => setPendingChange(null)} />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fadeIn" onClick={handleCancelPending} />
           <div className="relative bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-scaleIn border border-slate-100">
             <div className="p-8 text-center space-y-6">
               <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto mb-2 animate-bounce-subtle">
@@ -621,7 +670,7 @@ const ProfileSettings: React.FC<ProfileSettingsProps> = ({ profile, setProfile, 
               </div>
 
               <button
-                onClick={() => setPendingChange(null)}
+                onClick={handleCancelPending}
                 className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest pt-4"
               >
                 ביטול השינוי
